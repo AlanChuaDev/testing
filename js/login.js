@@ -1,0 +1,57 @@
+/* login.js — 创建角色 / 进入游戏（资料保存在本机；联机用昵称+外观）。 */
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const HAIRS = ['#2a1a14', '#5b3a29', '#8a5a3a', '#d8b26a', '#c94f6a', '#3b3f7a', '#e8e8f0', '#141414', '#7a4fd0'];
+const TOPS = ['#ef6a5b', '#2fb3a3', '#f6b92b', '#6c8cf0', '#c779d9', '#ff9d5c', '#5ac26e', '#f4f4f8', '#2b2b3a', '#ff7ab6'];
+const BOTS = ['#f4f4f8', '#2d3a5a', '#3d5a4a', '#e8a0b8', '#2b2b3a', '#c9b48a', '#8b5cf6'];
+const SKINC = ['#ffd6be', '#f5c9a8', '#e0a98a', '#c78d70'];
+const pick = a => a[(Math.random() * a.length) | 0];
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+let resolve; window.loginReady = new Promise(r => resolve = r);
+let profile = lsGet('sc_profile', null);
+let outfit = Object.assign({ hair: pick(HAIRS), top: pick(TOPS), bottom: pick(BOTS), socks: null, shoes: null, bottomType: 'shorts', choker: true, skin: 0, scale: 1 }, lsGet('sc_outfit', null) || {});
+
+function sw(list, key, row, isSkin) {
+  row.innerHTML = '';
+  list.forEach((c, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'sw'; b.style.background = c;
+    const v = isSkin ? i : c; if (outfit[key] === v) b.classList.add('on');
+    b.onclick = () => { outfit[key] = v; renderOutfit(); }; row.appendChild(b);
+  });
+}
+function renderOutfit() {
+  sw(HAIRS, 'hair', $('lgHair')); sw(TOPS, 'top', $('lgTop')); sw(BOTS, 'bottom', $('lgBot')); sw(SKINC, 'skin', $('lgSkin'), true);
+  $('lgSkirt').classList.toggle('on', outfit.bottomType === 'skirt'); $('lgShorts').classList.toggle('on', outfit.bottomType !== 'skirt');
+}
+function show(mode) {
+  $('lgWelcome').hidden = mode !== 'welcome'; $('lgCreate').hidden = mode !== 'create';
+  if (mode === 'welcome') $('lgName').textContent = profile.name;
+  if (mode === 'create') { $('lgInput').value = profile ? profile.name : ''; renderOutfit(); }
+  const needServer = !(window.NET_CONFIG && NET_CONFIG.server);
+  $('lgServerRow').hidden = !needServer; if (needServer) $('lgServer').value = localStorage.getItem('sc_server') || '';
+}
+function enter() {
+  if (!(window.NET_CONFIG && NET_CONFIG.server)) {
+    const v = $('lgServer').value.trim();
+    if (v) { try { localStorage.setItem('sc_server', v); } catch (e) {} }
+  }
+  window.Profile = profile;
+  $('login').classList.add('done'); setTimeout(() => $('login').remove(), 400);
+  resolve();
+}
+$('lgRandom').onclick = () => { outfit.hair = pick(HAIRS); outfit.top = pick(TOPS); outfit.bottom = pick(BOTS); outfit.skin = (Math.random() * 4) | 0; outfit.bottomType = Math.random() < .45 ? 'skirt' : 'shorts'; renderOutfit(); };
+$('lgSkirt').onclick = () => { outfit.bottomType = 'skirt'; renderOutfit(); };
+$('lgShorts').onclick = () => { outfit.bottomType = 'shorts'; renderOutfit(); };
+$('lgGo').onclick = () => {
+  const name = $('lgInput').value.replace(/[<>]/g, '').trim().slice(0, 12);
+  if (name.length < 1) { $('lgErr').textContent = '请先给角色起个名字'; return; }
+  profile = { uid: (profile && profile.uid) || ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + Math.random().toString(16).slice(2)), name };
+  lsSet('sc_profile', profile); lsSet('sc_outfit', outfit); enter();
+};
+$('lgEnter').onclick = enter;
+$('lgNew').onclick = () => show('create');
+show(profile ? 'welcome' : 'create');
+})();

@@ -16,7 +16,10 @@ js/glbchar.js
 js/karaoke-audio.js
 js/ktv.js
 js/ktvrooms.js
+js/login.js
 js/music.js
+js/net-config.js
+js/net.js
 js/plaza.js
 js/scene-bukit-bintang.js
 js/scene-common.js
@@ -25,3 +28,5 @@ js/scene_beach.js
 js/scene_funfair.js
 js/scenes.js
 js/world.js
+package.json
+server.js

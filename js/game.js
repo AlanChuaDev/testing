@@ -183,6 +183,7 @@ function enterScene(id, spawn) {
   populate(); spawnCoins(); $('banner').hidden = true; $('sceneName').textContent = G.scene.name; closePanels();
   addMsg('world', '', '— 你来到了「' + G.scene.name + '」—', false, true);
   G.autoCool = 1.3; if (id === 'plaza' || (G.scene.stage && !G.scene.private)) for (let i = 0; i < 2; i++) ktvEnqueueNpc();
+  if (window.Net) Net.onScene(id);
 }
 function goTo(id, spawn) {
   if (G.transitioning) return; G.transitioning = true; $('fade').classList.add('on');
@@ -275,7 +276,7 @@ function closePanels() { document.querySelectorAll('.sheet').forEach(p => p.hidd
 /* ---------------- chat ---------------- */
 function setBubble(e, text) { e.bubble = text.length > 26 ? text.slice(0, 25) + '…' : text; e.bt = 4.5; }
 function sendChat(text) {
-  text = text.trim(); if (!text) return; addMsg(G.tab, '我', text, true); setBubble(G.me, text);
+  text = text.trim(); if (!text) return; addMsg(G.tab, '我', text, true); setBubble(G.me, text); if (window.Net) Net.sendChat(G.tab, text);
 }
 function npcChat(dt) {
   G.chatT = (G.chatT || 0) - dt; if (G.chatT > 0 || !G.npcs.length) return; G.chatT = rand(2.5, 6);
@@ -312,7 +313,7 @@ function update(dt) {
   // npcs
   for (const e of G.npcs) npcStep(e, dt, sc);
   // soft separation
-  const all = [me, ...G.npcs];
+  const all = [me, ...G.npcs, ...(G.remotes || [])];
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const a = all[i], b = all[j], dx = b.x - a.x, dz = b.z - a.z, d2 = dx * dx + dz * dz; if (d2 < .36 && d2 > 1e-5 && !a.sit && !b.sit) { const d = Math.sqrt(d2), p = (.6 - d) * .5; const ux = dx / d * p, uz = dz / d * p; if (a !== me) moveEnt(a, -ux, -uz, sc); else moveEnt(a, -ux * .3, -uz * .3, sc); if (b !== me) moveEnt(b, ux, uz, sc); } }
   // animation + bubbles
   for (const e of all) {
@@ -381,7 +382,7 @@ function render() {
   }
   // shadows
   dynShadow.v.length = 0; dynShadow.i.length = 0; dynShadow.n = 0;
-  const all = [G.me, ...G.npcs];
+  const all = [G.me, ...G.npcs, ...(G.remotes || [])];
   for (const e of all) { const r = .5 * e.inst.scale; dynShadow.floor(e.x - r, e.z - r, e.x + r, e.z + r, e.y + .03, [0, 0, 0]); }
   R.drawDynamic(dynShadow, { tex: G.T.blob, mode: 3, glow: env.indoor ? .5 : .42 - .14 * env.night });
   // characters
@@ -514,7 +515,7 @@ async function boot() {
     text.textContent = '加载角色模型…';
     let buf; if (window.GLB64) { const s = atob(window.GLB64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); buf = u.buffer; } else buf = await (await fetch('assets/girl.glb')).arrayBuffer();
     G.model = await GLBChar.loadModel(buf, G.GR); GLBChar.addActions(G.model);
-    const saved = store.get('outfit', null); G.me = makeEntity(0, 2.5, '我', Object.assign({}, DEFAULT_OUTFIT, saved || {}), true);
+    const saved = store.get('outfit', null); G.me = makeEntity(0, 2.5, (window.Profile && Profile.name) || '我', Object.assign({}, DEFAULT_OUTFIT, saved || {}), true);
     { const st = Scenes.PLAZA_STYLES[G.style] || Scenes.PLAZA_STYLES.cozy; G.hour = QS.get('t') ? parseFloat(QS.get('t')) : st.hour; if (QS.get('t')) G.timeMode = 'x'; }
     G.scene = getScene('plaza'); enterScene('plaza'); spawnCoins();
     if (QS.get('pz')) { G.me.z = parseFloat(QS.get('pz')); G.cam.target[2] = G.me.z - G.scene.camera.lead; }
@@ -536,8 +537,9 @@ async function boot() {
       if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } return [w, h, q];
     };
     requestAnimationFrame(frame);
-    G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, ktvEnqueueNpc }; window.__game = G;
+    G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, ktvEnqueueNpc, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
+    if (window.Net) Net.start(G);
   } catch (err) { console.error(err); text.textContent = '加载失败：' + err.message + '（需要支持 WebGL2 的浏览器）'; }
 }
-boot();
+(window.loginReady || Promise.resolve()).then(boot);
 })();

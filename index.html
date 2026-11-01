@@ -8,6 +8,28 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- login / create character -->
+<div id="login">
+  <div class="lgBox">
+    <h1>STAR PLAZA · 星光广场</h1>
+    <div id="lgWelcome" hidden>
+      <p class="lgHi">欢迎回来，<b id="lgName"></b></p>
+      <div class="lgBtns"><button id="lgEnter" class="lgPrimary" type="button">进入游戏</button><button id="lgNew" type="button">修改角色</button></div>
+    </div>
+    <div id="lgCreate" hidden>
+      <label class="lgRow">昵称<input id="lgInput" maxlength="12" placeholder="给你的角色起个名字" autocomplete="off"></label>
+      <div class="lgRow">头发<div class="lgSw" id="lgHair"></div></div>
+      <div class="lgRow">上衣<div class="lgSw" id="lgTop"></div></div>
+      <div class="lgRow">下装<div class="lgSw" id="lgBot"></div><button id="lgShorts" class="chip" type="button">短裤</button><button id="lgSkirt" class="chip" type="button">短裙</button></div>
+      <div class="lgRow">肤色<div class="lgSw" id="lgSkin"></div><button id="lgRandom" class="chip" type="button">🎲 随机</button></div>
+      <p class="lgErr" id="lgErr"></p>
+      <div class="lgBtns"><button id="lgGo" class="lgPrimary" type="button">创建并进入</button></div>
+    </div>
+    <label class="lgRow" id="lgServerRow" hidden>服务器<input id="lgServer" placeholder="wss://你的服务名.onrender.com" autocomplete="off" autocapitalize="off"></label>
+    <p class="lgNote">角色资料保存在这台设备上；好友进入同一张地图就能互相看到。</p>
+  </div>
+</div>
+
 <canvas id="gl"></canvas>
 <canvas id="ov"></canvas>
 
@@ -28,6 +50,7 @@
   <div id="sceneName"></div>
   <button id="viewBtn">📷 视角：原版</button>
   <div id="banner" hidden></div>
+  <div id="lyricBar" hidden></div>
 
   <div id="joy"><div id="knob"></div></div>
 
@@ -55,7 +78,7 @@
   <header><h2>🎤 点歌机</h2><button class="x" data-close>✕</button></header>
   <div class="cols">
     <div class="col"><h3>歌单</h3><div id="songList"></div></div>
-    <div class="col"><h3>排队</h3><div id="queueList"></div><p class="hint" id="songHint">点歌后排队，轮到你时自动上台演唱（演示版没有真实音频）。</p></div>
+    <div class="col"><h3>排队</h3><div id="queueList"></div><p class="hint" id="songHint">点歌后排队，轮到你时自动上台演唱；上台后会自动开麦克风并播放伴奏（目前只有《小幸运》有伴奏）。</p></div>
   </div>
   <div id="karaokePlayer" class="karaoke-player">
     <div class="karaoke-now">🎵 正在播放：<b id="karaokeTitle">尚未点歌</b></div>
@@ -67,7 +90,7 @@
       <span id="karaokeMicStatus">麦克风未开启</span>
     </div>
     <audio id="karaokeAudio" preload="metadata"></audio>
-    <p class="hint">麦克风权限由手机系统弹窗确认。当前包已加入本机采集/权限流程；跨玩家实时传声还需部署语音信令服务器。</p>
+    <p class="hint">麦克风权限由手机系统弹窗确认。开麦后，同一张地图里的好友能听到你唱歌（建议戴耳机，避免回声）。</p>
   </div>
 </section>
 
@@ -105,6 +128,8 @@
 <div id="rotate"><div>📱↻<br>请把手机横过来玩</div></div>
 <div id="loading"><div><div class="spin"></div><p id="loadText">加载中…</p></div></div>
 
+<script src="js/net-config.js"></script>
+<script src="js/login.js"></script>
 <script src="js/glbchar.js"></script>
 <script src="js/world.js"></script>
 <script src="js/scenes.js"></script>
@@ -118,8 +143,8 @@
 <script src="js/scene_beach.js"></script>
 <script src="js/scene_funfair.js"></script>
 <script src="js/music.js"></script>
-<script src="js/game.js"></script>\n<script src="js/karaoke-audio.js"></script>
+<script src="js/karaoke-audio.js"></script>
+<script src="js/net.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>
-
-</body></html>
