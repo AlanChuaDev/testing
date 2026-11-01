@@ -11,7 +11,9 @@ let offset = 0, bestRtt = 1e9;
 const remotes = new Map();         // playerId -> entity
 const out = new Map();             // 我是演唱者：listenerId -> RTCPeerConnection
 const inn = new Map();             // 我是听众：singerId -> { pc, audio }
-let autoSing = false, kSyncT = 0, pendingRemoteK = null;
+let autoSing = false, kSyncT = 0, pendingRemoteK = null, kToastKey = '';
+const POSES = ['wave', 'dance', 'cheer', 'clap'];   // 远程玩家只允许这些动作名（服务器只限制了长度）
+const hooks = {};                                     // Net.on(type, fn)：给 gm.js 等模块接收服务器消息
 
 const toast = (m, ms) => api && api.toast(m, ms);
 const serverNow = () => Date.now() + offset;
@@ -79,7 +81,9 @@ function onMsg(m) {
     }
     case 'rtc': chain = chain.then(() => onRtc(m)).catch(() => {}); break;
     case 'karaoke': onKaraoke(m); break;
+    case 'songcfg': if (window.Karaoke) Karaoke.setSongConfig(m.cfg || {}); break;   // GM 保存的歌词 / 延迟
     case 'error': if (m.message) toast(m.message, 2500); break;
+    default: (hooks[m.type] || []).forEach(f => { try { f(m); } catch (e) {} });
   }
 }
 
@@ -106,7 +110,7 @@ function clearRemotes() { remotes.clear(); if (G) G.remotes.length = 0; refreshC
 function applyState(e, s, snap) {
   e.tx = s.x; e.tz = s.z; e.ty = s.y; e.yaw = s.yaw;
   e.moving = !!s.mv; e.run = !!s.run; e.sing = !!s.sing;
-  if (s.pz) { e.pose = 0.7; e.actClip = s.pz; } else { e.pose = 0; e.actClip = null; }
+  if (POSES.includes(s.pz)) { e.pose = 0.7; e.actClip = s.pz; } else { e.pose = 0; e.actClip = null; }
   if (s.sit) {
     if (!e.sit) { e.sit = { x: s.sit.x, z: s.sit.z, h: s.sit.h, yaw: s.sit.yaw }; e.sitFrom = [e.x, e.z]; e.sitP = snap ? 1 : 0; }
     else { e.sit.x = s.sit.x; e.sit.z = s.sit.z; e.sit.h = s.sit.h; e.sit.yaw = s.sit.yaw; }
@@ -212,12 +216,15 @@ function sendKaraoke(action) {
 }
 function onKaraoke(m) {
   if (Karaoke.playing()) return;                       // 我自己正在唱，不跟别人的
-  if (m.action === 'stop') { Karaoke.remoteStop(m.from); pendingRemoteK = null; return; }
+  if (m.action === 'stop') { Karaoke.remoteStop(m.from); pendingRemoteK = null; kToastKey = ''; return; }
   const pos = m.pos + Math.max(0, (serverNow() - m.ts)) / 1000;
   if (m.action === 'sync' && Karaoke.remotePlaying() && Karaoke.remoteFromId() === m.from) { Karaoke.remoteSync(pos); return; }
   const e = remotes.get(m.from);
   Karaoke.remoteStart(m.song, pos, e ? e.name : '', m.from).then(ok => {
-    if (!ok) { pendingRemoteK = { m, at: Date.now() }; toast('点一下屏幕，加入合唱伴奏 🎶', 3000); }
+    if (!ok) {
+      pendingRemoteK = { m, at: Date.now() };
+      const key = m.from + '|' + m.song; if (kToastKey !== key) { kToastKey = key; toast('点一下屏幕，加入合唱伴奏 🎶', 3000); }   // 同一首只提示一次，不再每 4 秒弹一次
+    }
   });
 }
 addEventListener('pointerdown', () => {
@@ -268,6 +275,8 @@ window.Net = {
     if (Karaoke.micStream()) { /* 我开着麦克风切换了地图：新房间的人加入时会自动建立连接 */ }
   },
   sendChat, refresh: refreshCount,
+  send: sendRaw,
+  on(type, fn) { (hooks[type] = hooks[type] || []).push(fn); },
   get connected() { return !!(ws && ws.readyState === 1); },
 };
 })();

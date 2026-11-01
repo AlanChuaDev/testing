@@ -307,7 +307,18 @@ function drawLED(c, ST, st, t) {
   const fit = (txt, maxw, size, w) => { c.font = F(w || 800, size); while (c.measureText(txt).width > maxw && size > 24) { size -= 4; c.font = F(w || 800, size); } return size; };
   const eq = (x0, y1, n, bw, gap, hmax) => { for (let i = 0; i < n; i++) { const h = hmax * (.2 + .8 * Math.abs(Math.sin(t * 3.1 + i * .9) * Math.cos(t * 1.7 + i * .5))); c.fillStyle = i % 2 ? ST.accent : ST.accent2; c.fillRect(x0 + i * (bw + gap), y1 - h, bw, h); } };
   const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-  if (st.mode === 'sing' || st.mode === 'wait') {
+  const ly = st.mode === 'sing' && window.Karaoke && Karaoke.lyricNow ? Karaoke.lyricNow() : null;   // 伴奏正在播放时才有歌词
+  if (ly) {                                   // —— 歌词版面：和 K 歌歌词条内容一致（当前句 + 下一句）——
+    const frac = clamp((st.left || 0) / (st.total || 1), 0, 1), red = frac < .2;
+    const head = (st.you ? '★ ' : '♪ ') + (st.name || '') + '  《' + (st.song || '') + '》';
+    gt(head, 56, 62, F(800, fit(head, 660, 38)), ST.accent2);
+    gt('⏱ ' + mmss(st.left || 0), W - 56, 62, F(800, 38), red ? '#ff5a6e' : ST.accent, 'right');
+    c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(56, 96, W - 112, 2);
+    const cur = ly.cur; gt(cur, W / 2, 168, F(800, fit(cur, 900, 76)), ST.accent2, 'center');
+    if (ly.next) { c.globalAlpha = .6; gt(ly.next, W / 2, 242, F(700, fit(ly.next, 900, 38, 700)), ST.accent, 'center'); c.globalAlpha = 1; }
+    eq(56, 362, 12, 14, 8, 40);
+    const nx = st.queue && st.queue.length ? 'NEXT ▸ ' + st.queue[0] : ''; if (nx) gt(nx, W - 56, 340, F(700, 26), ST.accent2, 'right');
+  } else if (st.mode === 'sing' || st.mode === 'wait') {
     const sing = st.mode === 'sing', fs = fit(st.name || '', 520, 84);
     gt(sing ? '♪ NOW SINGING' : '▶ ON DECK · 请上台', 56, 74, F(800, 32), ST.accent);
     gt(st.name || '', 56, 150, F(800, fs), ST.accent2);

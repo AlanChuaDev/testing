@@ -171,3 +171,24 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .meter{height:12px;border-radius:7px;background:#ffffff22;overflow:hidden;margin:8px 0}
 .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5ac26e,#f6b92b,#ef6a5b);transition:width .06s}
 .micLoop{display:block;font-size:12px;margin-top:8px;opacity:.85}
+
+/* ---- GM 面板 ---- */
+#gmPanel{width:min(820px,94vw)}
+#gmPanel .gmRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+#gmPanel .gmRow>input{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:#ffffff14;color:#fff;font-size:15px}
+#gmPanel select{width:100%;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:#2a1f55;color:#fff;font-size:14px}
+#gmPanel textarea{width:100%;box-sizing:border-box;height:min(260px,46vh);padding:8px;border-radius:10px;border:1.5px solid var(--line);background:#ffffff10;color:#fff;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;resize:none}
+#gmPanel .gmPrev{margin:8px 0;padding:8px 10px;border-radius:12px;background:#0006;border:1px solid var(--line);text-align:center}
+#gmPanel #gmCur{font-size:18px;font-weight:800;color:#ffe48a;min-height:24px}
+#gmPanel .gmPrev small{display:block;font-size:11px;opacity:.7;margin-top:2px}
+#gmPanel .col h3 b{color:#ffe48a}
+@media (max-height:480px){
+  #gmPanel .cols{padding:8px 12px;gap:10px}
+  #gmPanel .col h3{margin:3px 0;font-size:12px}
+  #gmPanel .gmRow{margin:4px 0;gap:5px}
+  #gmPanel .chip{padding:4px 10px;font-size:12px}
+  #gmPanel select{padding:5px 8px}
+  #gmPanel .gmPrev{margin:5px 0;padding:5px 8px}
+  #gmPanel #gmCur{font-size:16px;min-height:20px}
+  #gmPanel textarea{height:min(190px,48vh)}
+}

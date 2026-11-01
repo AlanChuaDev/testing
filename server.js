@@ -3,9 +3,80 @@
 const http = require("http");
 const WebSocket = require("ws");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = process.env.PORT || 10000;
 const MAX_ROOM = 40; // 每个房间最多人数
+
+// ---------- GM：歌词 / 歌曲延迟校准（保存后全服更新）----------
+// 环境变量（Render → Environment）：
+//   GM_KEY                      GM 密钥（必填；没设置就完全禁用 GM）
+//   UPSTASH_REDIS_REST_URL      可选：Upstash Redis 地址（设置后配置永久保存，重启不丢）
+//   UPSTASH_REDIS_REST_TOKEN    可选：Upstash Redis 令牌
+// 没配 Upstash 时只存在本机文件里：Render 免费版休眠/重启后会丢，需要重新保存。
+const GM_KEY = process.env.GM_KEY || "";
+const UP_URL = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/+$/, "");
+const UP_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
+const CFG_KEY = "starplaza:songcfg";
+const CFG_FILE = path.join(process.env.DATA_DIR || __dirname, "songcfg.json");
+let songCfg = {}; // { 歌名: { offset: 毫秒(-10000~10000), lrc: 歌词全文，空 = 用仓库里的文件 } }
+let gmFailTimes = []; // 全局失败登录时间，用来防暴力猜密钥
+
+function cleanOneCfg(c) {
+  c = c && typeof c === "object" ? c : {};
+  return {
+    offset: Math.max(-10000, Math.min(10000, Math.round(Number(c.offset) || 0))),
+    lrc: typeof c.lrc === "string" ? c.lrc.replace(/\u0000/g, "").slice(0, 12000) : "",
+  };
+}
+function cleanAllCfg(o) {
+  const out = {};
+  if (!o || typeof o !== "object") return out;
+  for (const k of Object.keys(o).slice(0, 50)) {
+    const name = String(k).slice(0, 40);
+    if (name) out[name] = cleanOneCfg(o[k]);
+  }
+  return out;
+}
+async function upstash(cmd) {
+  const r = await fetch(UP_URL, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + UP_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify(cmd),
+    signal: AbortSignal.timeout(5000),
+  });
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || "HTTP " + r.status);
+  return j.result;
+}
+async function loadCfg() {
+  try {
+    if (UP_URL && UP_TOKEN) {
+      const v = await upstash(["GET", CFG_KEY]);
+      if (v) songCfg = cleanAllCfg(JSON.parse(v));
+      console.log("songcfg loaded from Upstash:", Object.keys(songCfg).length, "songs");
+    } else if (fs.existsSync(CFG_FILE)) {
+      songCfg = cleanAllCfg(JSON.parse(fs.readFileSync(CFG_FILE, "utf8")));
+      console.log("songcfg loaded from file:", Object.keys(songCfg).length, "songs");
+    }
+  } catch (e) { console.error("load songcfg failed:", e.message); }
+}
+async function saveCfg() { // 返回保存到了哪里："upstash" | "disk" | "memory"
+  const text = JSON.stringify(songCfg);
+  if (UP_URL && UP_TOKEN) {
+    try { await upstash(["SET", CFG_KEY, text]); return "upstash"; }
+    catch (e) { console.error("save to Upstash failed:", e.message); }
+  }
+  try { fs.writeFileSync(CFG_FILE, text); return "disk"; }
+  catch (e) { console.error("save to file failed:", e.message); return "memory"; }
+}
+let saveChain = Promise.resolve();
+function safeEq(a, b) {
+  const ha = crypto.createHash("sha256").update(String(a)).digest();
+  const hb = crypto.createHash("sha256").update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
 
 const httpServer = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
@@ -83,6 +154,7 @@ wss.on("connection", (ws) => {
   ws.on("pong", () => { ws.isAlive = true; });
 
   send(ws, { type: "connected", playerId: ws.playerId });
+  send(ws, { type: "songcfg", cfg: songCfg }); // 新玩家一连上就拿到 GM 保存的歌词 / 延迟
 
   ws.on("message", (raw) => {
     // 简单限速：每秒最多 60 条
@@ -95,6 +167,34 @@ wss.on("connection", (ws) => {
     if (!m || typeof m.type !== "string") return;
 
     if (m.type === "ping") return send(ws, { type: "pong", t: m.t, ts: Date.now() });
+
+    // GM 登录：密钥只在服务器端比对，客户端代码里没有
+    if (m.type === "gm_login") {
+      if (!GM_KEY) return send(ws, { type: "gmFail", message: "服务器没有设置 GM_KEY，GM 功能未启用" });
+      const now2 = Date.now();
+      gmFailTimes = gmFailTimes.filter((t) => now2 - t < 10 * 60 * 1000);
+      if (gmFailTimes.length >= 20 || (ws.gmBlockUntil && now2 < ws.gmBlockUntil)) {
+        return send(ws, { type: "gmFail", message: "尝试次数太多，请稍后再试" });
+      }
+      if (safeEq(m.key || "", GM_KEY)) { ws.isGM = true; ws.gmFails = 0; return send(ws, { type: "gmOk" }); }
+      gmFailTimes.push(now2);
+      ws.gmFails = (ws.gmFails || 0) + 1;
+      if (ws.gmFails >= 5) { ws.gmFails = 0; ws.gmBlockUntil = now2 + 60 * 1000; }
+      return send(ws, { type: "gmFail", message: "密钥不对" });
+    }
+
+    // GM 保存：只有登录过的连接才能改；改完广播给所有在线玩家，并持久化
+    if (m.type === "gm_save") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const song = String(m.song || "").trim().slice(0, 40);
+      if (!song) return;
+      const c = cleanOneCfg(m.cfg);
+      if (c.offset === 0 && !c.lrc) delete songCfg[song]; else songCfg[song] = c;
+      for (const cl of wss.clients) send(cl, { type: "songcfg", cfg: songCfg });
+      console.log("GM saved song config:", song, "offset=" + c.offset, "customLrc=" + !!c.lrc);
+      saveChain = saveChain.then(saveCfg).then((mode) => send(ws, { type: "gmSaved", song, persist: mode }));
+      return;
+    }
 
     if (m.type === "join") {
       const room = String(m.room || "").trim();
@@ -182,4 +282,6 @@ setInterval(() => {
   }
 }, 25000);
 
-httpServer.listen(PORT, "0.0.0.0", () => console.log("Multiplayer server listening on port " + PORT));
+loadCfg().finally(() => {
+  httpServer.listen(PORT, "0.0.0.0", () => console.log("Multiplayer server listening on port " + PORT));
+});

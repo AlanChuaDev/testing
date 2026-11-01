@@ -523,13 +523,15 @@ async function boot() {
     for (let i = 0; i < 6; i++) { const t = pick(SAY_WORLD); addMsg('world', pick(NAMES), t); }
     bindInput(); setCoins(G.coinCount); updateClock(); syncSeg(); renderLog();
     let last = performance.now(), clk = 0, firstPortrait = true;
+    let errAt = -1e9;
     const frame = now => {
+      requestAnimationFrame(frame);        // 先排下一帧：这一帧哪怕出错，游戏循环也不会停
       const dt = Math.min(.05, (now - last) / 1000); last = now; clk += dt;
-      if (!G.transitioning || true) update(dt);
-      const dpr = Math.min(window.devicePixelRatio || 1, G.quality); G.R.resize = G.R.resize; // quality handled below
-      render(); if (firstPortrait) { drawPortrait(); firstPortrait = false; $('loading').classList.add('done'); }
-      if (clk > .4) { clk = 0; updateClock(); }
-      requestAnimationFrame(frame);
+      try {
+        update(dt); render();
+        if (firstPortrait) { firstPortrait = false; $('loading').classList.add('done'); try { drawPortrait(); } catch (e) { console.error(e); } }
+        if (clk > .4) { clk = 0; updateClock(); }
+      } catch (err) { if (now - errAt > 3000) { errAt = now; console.error('frame error', err); } }
     };
     // quality => canvas resolution scale
     const origResize = G.R.resize.bind(G.R);
