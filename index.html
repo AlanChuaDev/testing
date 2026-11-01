@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#120e2b">
+<title>STAR PLAZA · 星光广场</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="ov"></canvas>
+
+<div id="hud">
+  <div id="card">
+    <canvas id="avatar" width="128" height="128"></canvas>
+    <div class="ct"><div id="pname">我</div><div id="coins"><i></i><span id="coinN">1,250</span></div></div>
+  </div>
+
+  <button id="timeChip" title="切换时间：自动 / 白天 / 黄昏 / 夜晚"><span id="timeIcon">☀</span><span id="timeText">18:30</span><em id="timeMode">自动</em></button>
+
+  <div id="topR">
+    <button id="serverBtn">服务器 1 <b>▾</b></button>
+    <button id="gear" aria-label="设置">⚙</button>
+    <div id="online">在线 <b id="onlineN">0</b></div>
+  </div>
+
+  <div id="sceneName"></div>
+  <button id="viewBtn">📷 视角：原版</button>
+  <div id="banner" hidden></div>
+
+  <div id="joy"><div id="knob"></div></div>
+
+  <div id="chat">
+    <div id="tabs"><button data-ch="world" class="on">世界</button><button data-ch="team">组队</button><button data-ch="family">家族</button></div>
+    <div id="log"></div>
+    <form id="chatForm" autocomplete="off"><input id="chatIn" placeholder="说点什么…" maxlength="40" enterkeyhint="send"><button type="submit" aria-label="发送">➤</button></form>
+  </div>
+
+  <div id="actions">
+    <button id="enterBtn" disabled><span id="enterIcon">🚪</span><span id="enterText">互动</span></button>
+    <button data-act="chorus"><span>🎤</span>合唱</button>
+    <button data-act="friends"><span>👥</span>好友</button>
+    <button data-act="chat"><span>💬</span>聊天</button>
+    <button data-act="gift"><span>🎁</span>礼物</button>
+    <button data-act="pose"><span>🕺</span>姿势</button>
+    <button data-act="wardrobe"><span>👗</span>换装</button>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<!-- KTV song machine -->
+<section class="sheet" id="songPanel" hidden>
+  <header><h2>🎤 点歌机</h2><button class="x" data-close>✕</button></header>
+  <div class="cols">
+    <div class="col"><h3>歌单</h3><div id="songList"></div></div>
+    <div class="col"><h3>排队</h3><div id="queueList"></div><p class="hint" id="songHint">点歌后排队，轮到你时自动上台演唱（演示版没有真实音频）。</p></div>
+  </div>
+</section>
+
+<!-- wardrobe -->
+<section class="sheet" id="wardPanel" hidden>
+  <header><h2>👗 换装</h2><button class="x" data-close>✕</button></header>
+  <div class="cols wide">
+    <div class="col" id="wardOpts"></div>
+  </div>
+</section>
+
+<section class="sheet small" id="elevPanel" hidden>
+  <header><h2>🛗 天皇巨星 · 电梯</h2><button class="x" data-close>✕</button></header>
+  <div id="elevOpts"></div>
+</section>
+
+<section class="sheet small" id="hubPanel" hidden>
+  <header><h2>🌀 传送阵 · 选择目的地</h2><button class="x" data-close>✕</button></header>
+  <div id="hubOpts"></div>
+</section>
+
+<!-- settings -->
+<section class="sheet small" id="setPanel" hidden>
+  <header><h2>⚙ 设置</h2><button class="x" data-close>✕</button></header>
+  <div class="col">
+    <h3>人群数量（广场）</h3><div class="seg" id="segCrowd"><button data-v="8">少</button><button data-v="22">中</button><button data-v="40">多</button></div>
+    <h3>画质</h3><div class="seg" id="segQ"><button data-v="1">流畅</button><button data-v="1.5">标准</button><button data-v="2">高清</button></div>
+    <h3>角色描边</h3><div class="seg" id="segOl"><button data-v="1">开</button><button data-v="0">关</button></div>
+    <h3>背景音乐</h3><div class="seg" id="segMusic"><button data-v="1">开</button><button data-v="0">关</button></div>
+    <h3>音乐音量</h3><div class="seg" id="segVol"><button data-v="0.3">小</button><button data-v="0.6">中</button><button data-v="0.9">大</button></div>
+  </div>
+</section>
+
+<div id="fade"></div>
+<div id="rotate"><div>📱↻<br>请把手机横过来玩</div></div>
+<div id="loading"><div><div class="spin"></div><p id="loadText">加载中…</p></div></div>
+
+<script src="js/glbchar.js"></script>
+<script src="js/world.js"></script>
+<script src="js/scenes.js"></script>
+<script src="js/scene-common.js"></script>
+<script src="js/plaza.js"></script>
+<script src="js/boutique.js"></script>
+<script src="js/ktv.js"></script>
+<script src="js/ktvrooms.js"></script>
+<script src="js/scene-klcc.js"></script>
+<script src="js/scene-bukit-bintang.js"></script>
+<script src="js/scene_beach.js"></script>
+<script src="js/scene_funfair.js"></script>
+<script src="js/music.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
+
+</body></html>
