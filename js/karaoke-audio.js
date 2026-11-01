@@ -127,6 +127,40 @@ $('songList')?.addEventListener('click', e => {
 }, true);
 if (audio) audio.addEventListener('ended', () => { showBar(''); listeners.local.forEach(f => f('stop')); });
 
+/* ---------- 麦克风测试（设置面板） ---------- */
+let mt = null;
+function mtStatus(t) { const s = $('micTestStatus'); if (s) s.textContent = t; }
+async function micTestStart() {
+  if (mt) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { mtStatus('此环境不支持麦克风（需要 HTTPS 或 APK）'); return; }
+  let stream, own = false;
+  try {
+    stream = micStream || (own = true, await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }));
+  } catch (err) { mtStatus(err.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在系统设置里允许' : '麦克风启动失败：' + err.message); return; }
+  const AC = window.AudioContext || window.webkitAudioContext, ctx = new AC();
+  if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
+  const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 1024; src.connect(an);
+  const loopG = ctx.createGain(); loopG.gain.value = 0; src.connect(loopG); loopG.connect(ctx.destination);
+  const buf = new Uint8Array(an.fftSize); let peak = 0, raf = 0; const t0 = performance.now(); mt = { stream, own, ctx, stop: null };
+  const tick = () => {
+    an.getByteTimeDomainData(buf); let sum = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+    const rms = Math.sqrt(sum / buf.length), lvl = Math.min(1, rms * 5); peak = Math.max(peak, rms);
+    const m = $('micMeter'); if (m) m.style.width = (lvl * 100).toFixed(0) + '%';
+    loopG.gain.value = $('micLoop') && $('micLoop').checked ? 1 : 0;
+    if (peak > 0.02) mtStatus('✅ 麦克风正常，能听到你的声音');
+    else if (performance.now() - t0 > 4000) mtStatus('❌ 没检测到声音：请检查麦克风权限、是否静音，或靠近一点说话');
+    raf = requestAnimationFrame(tick);
+  };
+  mt.stop = () => {
+    cancelAnimationFrame(raf); try { src.disconnect(); loopG.disconnect(); ctx.close(); } catch (e) {}
+    if (mt.own) stream.getTracks().forEach(t => t.stop());
+    mt = null; const b = $('micTestBtn'); if (b) b.textContent = '🎙 开始测试'; const m = $('micMeter'); if (m) m.style.width = '0%';
+  };
+  const b = $('micTestBtn'); if (b) b.textContent = '⏹ 停止测试'; mtStatus('请对着手机说话…'); tick();
+}
+$('micTestBtn')?.addEventListener('click', () => { if (mt) { mt.stop(); mtStatus('已停止'); } else micTestStart(); });
+setInterval(() => { const p = $('setPanel'); if (mt && p && p.hidden) mt.stop(); }, 500);   // 关掉设置面板自动停止
+
 window.Karaoke = {
   play, pause, position, playing, songName, hasSong,
   micOn, micOff, micStream: micStreamNow,

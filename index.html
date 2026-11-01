@@ -116,11 +116,19 @@
 <section class="sheet small" id="setPanel" hidden>
   <header><h2>⚙ 设置</h2><button class="x" data-close>✕</button></header>
   <div class="col">
+    <h3>机器人（NPC）</h3><div class="seg" id="segNpc"><button data-v="1">开</button><button data-v="0">关</button></div>
     <h3>人群数量（广场）</h3><div class="seg" id="segCrowd"><button data-v="8">少</button><button data-v="22">中</button><button data-v="40">多</button></div>
     <h3>画质</h3><div class="seg" id="segQ"><button data-v="1">流畅</button><button data-v="1.5">标准</button><button data-v="2">高清</button></div>
     <h3>角色描边</h3><div class="seg" id="segOl"><button data-v="1">开</button><button data-v="0">关</button></div>
     <h3>背景音乐</h3><div class="seg" id="segMusic"><button data-v="1">开</button><button data-v="0">关</button></div>
     <h3>音乐音量</h3><div class="seg" id="segVol"><button data-v="0.3">小</button><button data-v="0.6">中</button><button data-v="0.9">大</button></div>
+    <h3>麦克风测试</h3>
+    <div id="micTest">
+      <button id="micTestBtn" type="button" class="chip">🎙 开始测试</button>
+      <label class="micLoop"><input type="checkbox" id="micLoop"> 回放我的声音（必须戴耳机，否则会啸叫）</label>
+      <div class="meter"><i id="micMeter"></i></div>
+      <p class="hint" id="micTestStatus">点「开始测试」，然后对着手机说话，绿条会跳动。</p>
+    </div>
   </div>
 </section>
 

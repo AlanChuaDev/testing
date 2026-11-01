@@ -267,7 +267,7 @@ window.Net = {
     wantRoom = 'sv1:' + id; joinRoom();
     if (Karaoke.micStream()) { /* 我开着麦克风切换了地图：新房间的人加入时会自动建立连接 */ }
   },
-  sendChat,
+  sendChat, refresh: refreshCount,
   get connected() { return !!(ws && ws.readyState === 1); },
 };
 })();

@@ -14,7 +14,7 @@ const G = {
   R: null, GR: null, model: null, T: null, scenes: {}, scene: null, sceneId: 'plaza',
   me: null, npcs: [], coins: [], hour: 18.4, timeMode: 'auto', t: 0, joy: { x: 0, z: 0 }, keys: {}, target: null,
   coinCount: store.get('coins', 1250), chat: { world: [], team: [], family: [] }, tab: 'world',
-  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62 }, quality: store.get('q', 1.5), crowd: store.get('crowd', 22), outline: store.get('ol', 1),
+  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62 }, quality: store.get('q', 1.5), crowd: store.get('crowd', 22), outline: store.get('ol', 1), npcOn: store.get('npc', 1),
   wide: store.get('wide', false), transitioning: false, near: null, standHot: { id: 'stand' }, stg: { mode: 'idle', queue: [] }, ktv: { queue: [], cur: null, t: 0, nextAdd: 6 },
 };
 const SKIN = [[1, 1, 1], [.96, .88, .8], [.88, .74, .62], [.78, .62, .5]];
@@ -92,13 +92,13 @@ function randomSpot(sc) { for (let k = 0; k < 40; k++) { const r = sc.npcRect, x
 
 function populate() {
   const sc = G.scene; G.npcs = [];
-  const n = (G.sceneId === 'plaza' || G.sceneId === 'klcc' || G.sceneId === 'bukit') ? G.crowd : (sc.npcN != null ? sc.npcN : (G.sceneId === 'beach' || G.sceneId === 'funfair' ? 4 : 9));
+  const n = !G.npcOn ? 0 : (G.sceneId === 'plaza' || G.sceneId === 'klcc' || G.sceneId === 'bukit') ? G.crowd : (sc.npcN != null ? sc.npcN : (G.sceneId === 'beach' || G.sceneId === 'funfair' ? 4 : 9));
   const used = new Set();
   for (let i = 0; i < n; i++) {
     let [x, z] = randomSpot(sc); let nm; do { nm = pick(NAMES); } while (used.has(nm) && used.size < NAMES.length); used.add(nm);
     G.npcs.push(makeEntity(x, z, nm, randomOutfit(), false));
   }
-  $('onlineN').textContent = G.npcs.length + 1;
+  $('onlineN').textContent = G.npcs.length + 1; if (window.Net && Net.refresh) Net.refresh();
 }
 
 /* ---------------- scene switching ---------------- */
@@ -474,15 +474,16 @@ function bindInput() {
   $('chatIn').addEventListener('keydown', e => e.stopPropagation());
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = closePanels);
   $('timeChip').onclick = () => { const order = ['auto', 'day', 'dusk', 'night'], i = (order.indexOf(G.timeMode) + 1) % 4; G.timeMode = order[i]; if (G.timeMode === 'day') G.hour = 12.5; if (G.timeMode === 'dusk') G.hour = 18.4; if (G.timeMode === 'night') G.hour = 22; updateClock(); };
-  $('serverBtn').onclick = () => toast('服务器：目前是本地演示，联网版之后再做');
+  $('serverBtn').onclick = () => toast(window.Net && Net.connected ? '已连接服务器 ✅' : '未连接服务器（离线单机）', 2200);
   $('gear').onclick = () => { $('setPanel').hidden = false; syncSeg(); };
   const seg = (id, key, fn) => $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; fn(parseFloat(b.dataset.v)); syncSeg(); });
   seg('segCrowd', 'crowd', v => { G.crowd = v; store.set('crowd', v); if (G.sceneId === 'plaza' || G.sceneId === 'klcc' || G.sceneId === 'bukit') populate(); });
+  seg('segNpc', 'npc', v => { G.npcOn = v ? 1 : 0; store.set('npc', G.npcOn); if (!G.npcOn) { if (G.ktv.cur && !G.ktv.cur.you) endTurn(false); G.ktv.queue = G.ktv.queue.filter(x => x.you); } populate(); toast(G.npcOn ? '机器人已开启' : '机器人已关闭（只剩真人玩家）', 1600); });
   seg('segQ', 'q', v => { G.quality = v; store.set('q', v); });
   seg('segOl', 'ol', v => { G.outline = v; store.set('ol', v); });
   addEventListener('contextmenu', e => e.preventDefault());
 }
-function syncSeg() { [['segCrowd', G.crowd], ['segQ', G.quality], ['segOl', G.outline]].forEach(([id, v]) => [...$(id).children].forEach(b => b.classList.toggle('on', parseFloat(b.dataset.v) === v))); }
+function syncSeg() { [['segCrowd', G.crowd], ['segNpc', G.npcOn], ['segQ', G.quality], ['segOl', G.outline]].forEach(([id, v]) => [...$(id).children].forEach(b => b.classList.toggle('on', parseFloat(b.dataset.v) === v))); }
 function interact() {
   const n = G.near; if (!n || G.transitioning) return;
   if (G.scene.onUse && G.scene.onUse(n, { toast, goTo, setBubble, setCoins, G, pay })) return;

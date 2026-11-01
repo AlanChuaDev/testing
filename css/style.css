@@ -167,3 +167,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 #lyricBar small{display:block;font-size:11px;opacity:.75;font-weight:700}
 #lyricBar[hidden]{display:none}
 #rotate{z-index:70}
+#setPanel .col{overflow-y:auto;max-height:68vh}
+.meter{height:12px;border-radius:7px;background:#ffffff22;overflow:hidden;margin:8px 0}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5ac26e,#f6b92b,#ef6a5b);transition:width .06s}
+.micLoop{display:block;font-size:12px;margin-top:8px;opacity:.85}
