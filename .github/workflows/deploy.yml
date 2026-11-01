@@ -114,6 +114,9 @@ jobs:
           S=app/src/main/res/values/styles.xml
           sed -i 's#<item name="windowActionBar">false</item>#<item name="windowActionBar">false</item><item name="android:windowFullscreen">true</item><item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>#' "$S"
           grep -n "screenOrientation" "$M" || { echo "横屏设置失败"; exit 1; }
+          # 麦克风（K歌语音）权限
+          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" /><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" /><application#' "$M"
+          grep -n "RECORD_AUDIO" "$M" || { echo "麦克风权限设置失败"; exit 1; }
 
       - name: 编译 debug APK
         working-directory: /tmp/app/android
