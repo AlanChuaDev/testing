@@ -12,6 +12,7 @@ zips = sorted(glob.glob('*.zip'), key=lambda p: (subprocess.run(['git', 'log', '
 if not zips:
     print('no zip found, nothing to do'); sys.exit(0)
 z = zips[-1]; print('unpacking', z)
+PATCH = z.lower().endswith('-patch.zip')   # 补丁模式：只覆盖/新增文件，不删除旧文件
 
 tmp = tempfile.mkdtemp()
 with zipfile.ZipFile(z) as zf:
@@ -35,7 +36,7 @@ if not os.path.exists(os.path.join(src, 'index.html')):
     sys.exit('index.html not found in the zip (expected at top level or inside one folder)')
 
 # remove files from the previous deployment
-if os.path.exists(MANIFEST):
+if os.path.exists(MANIFEST) and not PATCH:
     for line in open(MANIFEST, encoding='utf-8').read().splitlines():
         line = line.strip()
         if line and not line.startswith('.github') and os.path.isfile(line):
@@ -51,6 +52,8 @@ for root, dirs, files in os.walk(src):
         full = os.path.join(root, f); rel = os.path.relpath(full, src).replace(os.sep, '/')
         if rel.startswith('.github/') or rel.lower().endswith('.zip') or rel == MANIFEST: continue
         os.makedirs(os.path.dirname(rel) or '.', exist_ok=True); shutil.copy2(full, rel); new.append(rel)
+if PATCH and os.path.exists(MANIFEST):
+    new = sorted(set(new) | set(l.strip() for l in open(MANIFEST, encoding='utf-8').read().splitlines() if l.strip()))
 open(MANIFEST, 'w', encoding='utf-8').write('\n'.join(sorted(new)) + '\n')
 for p in zips: os.remove(p)
 print('deployed', len(new), 'files')
