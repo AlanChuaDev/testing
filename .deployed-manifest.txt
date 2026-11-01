@@ -6,11 +6,14 @@ assets/music/funfair.mp3
 assets/music/klcc.mp3
 assets/music/mall.mp3
 assets/music/plaza.mp3
+assets/songs/xiaoxingyun.lrc
+assets/songs/xiaoxingyun.mp3
 css/style.css
 index.html
 js/boutique.js
 js/game.js
 js/glbchar.js
+js/karaoke-audio.js
 js/ktv.js
 js/ktvrooms.js
 js/music.js

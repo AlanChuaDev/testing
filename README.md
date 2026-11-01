@@ -24,3 +24,12 @@
 
 ## 部署
 `.github/workflows/deploy.yml` 与 `.github/scripts/unpack.py`：上传 zip → 解压 → 网页（Pages）+ APK（Release「最新测试 APK」/ Artifacts）。
+
+
+## K 歌测试模块（新增）
+- `assets/songs/xiaoxingyun.mp3`：测试歌曲《小幸运》
+- `assets/songs/xiaoxingyun.lrc`：对应时间轴歌词
+- `js/karaoke-audio.js`：本地音频播放、LRC 同步歌词、麦克风权限/采集开关
+- Android 构建 workflow 增加 `RECORD_AUDIO` 与 `MODIFY_AUDIO_SETTINGS` 权限
+
+**重要限制：** 当前模块能在单个设备上播放伴奏、显示歌词并申请/采集麦克风。它还没有把麦克风音频传给其他玩家。多人实时语音必须另行部署 WebRTC 信令/房间服务（例如自有服务器或受控的实时通信服务），并接入房间成员、上麦状态、音频转发/订阅和断线重连；没有服务地址与部署凭据，无法仅靠静态 HTML/ZIP 实现玩家互相听见。此版本不宣称多人语音已完成。

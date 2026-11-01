@@ -57,6 +57,18 @@
     <div class="col"><h3>歌单</h3><div id="songList"></div></div>
     <div class="col"><h3>排队</h3><div id="queueList"></div><p class="hint" id="songHint">点歌后排队，轮到你时自动上台演唱（演示版没有真实音频）。</p></div>
   </div>
+  <div id="karaokePlayer" class="karaoke-player">
+    <div class="karaoke-now">🎵 正在播放：<b id="karaokeTitle">尚未点歌</b></div>
+    <div class="karaoke-lyrics" id="karaokeLyrics">点歌后同步显示歌词</div>
+    <div class="karaoke-controls">
+      <button id="karaokePlay" type="button">▶ 播放/继续</button>
+      <button id="karaokePause" type="button">⏸ 暂停</button>
+      <button id="karaokeMic" type="button">🎙 开启麦克风</button>
+      <span id="karaokeMicStatus">麦克风未开启</span>
+    </div>
+    <audio id="karaokeAudio" preload="metadata"></audio>
+    <p class="hint">麦克风权限由手机系统弹窗确认。当前包已加入本机采集/权限流程；跨玩家实时传声还需部署语音信令服务器。</p>
+  </div>
 </section>
 
 <!-- wardrobe -->
@@ -106,7 +118,7 @@
 <script src="js/scene_beach.js"></script>
 <script src="js/scene_funfair.js"></script>
 <script src="js/music.js"></script>
-<script src="js/game.js"></script>
+<script src="js/game.js"></script>\n<script src="js/karaoke-audio.js"></script>
 </body>
 </html>
 
