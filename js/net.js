@@ -261,8 +261,10 @@ function sendKaraoke(action) {
 }
 function onKaraoke(m) {
   if (Karaoke.playing()) return;                       // 我自己正在唱，不跟别人的
-  if (m.action === 'stop') { Karaoke.remoteStop(m.from); pendingRemoteK = null; kToastKey = ''; return; }
+  if (m.action === 'stop') { Karaoke.remoteStop(m.from); if (pendingRemoteK && pendingRemoteK.m.from === m.from) { pendingRemoteK = null; kToastKey = ''; } return; }
   const pos = m.pos + Math.max(0, (serverNow() - m.ts)) / 1000;
+  if (Karaoke.remoteActive() && Karaoke.remoteFromId() !== m.from) return;   // 已经在听别人的伴奏：不跟着换人（两个人同时唱时，以前每 4 秒会来回切一次）
+  if (pendingRemoteK && pendingRemoteK.m.from !== m.from && Date.now() - pendingRemoteK.at < 60000) return;   // 正在等玩家点屏幕加入某个人的伴奏，不被别人抢走
   if (m.action === 'sync' && Karaoke.remotePlaying() && Karaoke.remoteFromId() === m.from) { Karaoke.remoteSync(pos); return; }
   const e = remotes.get(m.from);
   Karaoke.remoteStart(m.song, pos, e ? e.name : '', m.from).then(ok => {
@@ -316,6 +318,8 @@ window.Net = {
   },
   onScene(id) {
     if (!started) return;
+    if (Karaoke.playing()) Karaoke.pause();      // 换地图：本机伴奏必须停（否则会一直往新房间发同步消息，新房间的人会听到）
+    pendingRemoteK = null; kToastKey = '';
     clearRemotes(); closeAllVoice(); Karaoke.remoteStop();
     wantRoom = 'sv1:' + id; inRoom = false; joinRoom();
     emit('_scene', { id });

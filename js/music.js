@@ -5,14 +5,14 @@
   const FILES = { plaza: 'plaza', boutique: 'mall', bukit: 'bukit', klcc: 'klcc', beach: 'beach', funfair: 'funfair' };
   const XF = 1.4;                                                  // crossfade seconds (between tracks and between loop repeats)
   const ls = { get(k, d) { try { const v = localStorage.getItem('sc_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('sc_' + k, JSON.stringify(v)); } catch (e) {} } };
-  const M = { on: ls.get('music', 1) !== 0 && ls.get('music', 1) !== false, vol: ls.get('mvol', .6), want: null, cur: null, ctx: null, master: null, cache: {} };
+  const M = { on: ls.get('music', 1) !== 0 && ls.get('music', 1) !== false, vol: ls.get('mvol', .6), want: null, ducked: false, cur: null, ctx: null, master: null, cache: {} };
   const curve = (up) => { const n = 48, a = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1); a[i] = up ? Math.sin(x * Math.PI / 2) : Math.cos(x * Math.PI / 2); } return a; };
   const UP = curve(true), DOWN = curve(false);
 
   function ensureCtx() {
     if (M.ctx) return true;
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
-    try { M.ctx = new AC(); M.master = M.ctx.createGain(); M.master.gain.value = M.on ? M.vol : 0; M.master.connect(M.ctx.destination); } catch (e) { M.ctx = null; return false; }
+    try { M.ctx = new AC(); M.master = M.ctx.createGain(); M.master.gain.value = (M.on && !M.ducked) ? M.vol : 0; M.master.connect(M.ctx.destination); } catch (e) { M.ctx = null; return false; }
     return true;
   }
   function load(name) {
@@ -47,7 +47,7 @@
     if (!name) return;
     load(name).then(buf => { if (M.want !== name || (M.cur && M.cur.name === name)) return; M.cur = startVoice(name, buf); }).catch(() => {});
   }
-  function setVol() { if (M.master) M.master.gain.setTargetAtTime(M.on ? M.vol : 0, M.ctx.currentTime, .12); }
+  function setVol() { if (M.master) M.master.gain.setTargetAtTime((M.on && !M.ducked) ? M.vol : 0, M.ctx.currentTime, (M.on && !M.ducked) ? .35 : .12); }   // 唱歌 / 播放伴奏时背景音乐淡出，唱完淡入
   function unlock() {
     if (!ensureCtx()) return;
     if (M.ctx.state !== 'running') M.ctx.resume().catch(() => {});
@@ -65,5 +65,5 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireSettings); else wireSettings();
 
-  window.Music = { setScene(id) { M.want = FILES[id] || null; apply(); }, get enabled() { return M.on; } };
+  window.Music = { duck(f) { f = !!f; if (M.ducked === f) return; M.ducked = f; setVol(); }, setScene(id) { M.want = FILES[id] || null; apply(); }, get enabled() { return M.on; } };
 })();

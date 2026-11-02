@@ -295,8 +295,8 @@ function openActions() {
   const grid = $('actGrid'); grid.innerHTML = '';
   ACTIONS.forEach(A => {
     const b = document.createElement('button'); b.className = 'actb'; b.innerHTML = `<span class="ai">${A.i}</span>${A.n}`; if (A.col) b.style.setProperty('--ac', A.col);
-    if (G.me.sit && !A.sit) b.classList.add('off');
-    b.onclick = () => { if (G.me.sit && !A.sit) return toast('这个动作要先起身再做', 1400); closePanels(); G.me.pose = A.t; G.me.actClip = A.c; setBubble(G.me, A.b); toast(A.n, 1000); };
+    if ((G.me.sit && !A.sit) || G.me.sing || G.me.singing) b.classList.add('off');
+    b.onclick = () => { if (G.me.sing || G.me.singing) return toast('演唱中不能做动作，唱完这首再来 🎤', 1600); if (G.me.sit && !A.sit) return toast('这个动作要先起身再做', 1400); closePanels(); G.me.pose = A.t; G.me.actClip = A.c; setBubble(G.me, A.b); toast(A.n, 1000); };
     grid.appendChild(b);
   });
   $('actPanel').hidden = false;
@@ -367,7 +367,8 @@ function update(dt) {
     inst.scale = (e.outfit.scale || 1) * 1.4 * PHONE_K();
     if (e.sit) { e.sitP = Math.min(1, e.sitP + dt / .35); const k = e.sitP * e.sitP * (3 - 2 * e.sitP), s = e.sit; e.x = e.sitFrom[0] + (s.x - e.sitFrom[0]) * k; e.z = e.sitFrom[1] + (s.z - e.sitFrom[1]) * k; e.y = s.h - SIT_DROP * k * (e.inst.scale / 1.4); e.yaw = s.yaw; e.moving = false; }
     if (e.cheerT > 0) e.cheerT -= dt;
-    if (e.pose > 0) { e.pose -= dt; clip = e.actClip || ((G.ktv.arrived && !e.sing && !e.sit && G.sceneId === 'plaza') ? 'cheer' : 'wave'); if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer';
+    if (e.pose > 0 && e.sing && !e.sit && !e.moving) { e.pose = 0; clip = 'sing'; }   // 演唱中：唱歌动作优先，不被其他动作打断
+    else if (e.pose > 0) { e.pose -= dt; clip = e.actClip || ((G.ktv.arrived && !e.sing && !e.sit && G.sceneId === 'plaza') ? 'cheer' : 'wave'); if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer';
     inst.hidden.SignOK = clip.replace('sit_', '') !== 'signok'; inst.hidden.SignNo = clip.replace('sit_', '') !== 'signno';   // 举牌动作才显示牌子
     inst.play(clip, .2); inst.speed = e.moving ? (e.run ? 1 : (e.isMe ? 1.1 : 1.0)) : 1;
     if (e.vis !== false || e.isMe) inst.update(dt);

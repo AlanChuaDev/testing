@@ -81,6 +81,7 @@ function showBar(text, who) {            // 只用 textContent，演唱者名字
 /* ---------- 本机播放（演唱者 / 单机） ---------- */
 const audio = $('karaokeAudio');
 let lines = [], lyricsOwner = null;
+let playSeq = 0, remoteSeq = 0;           // 每次开始/停止都 +1：异步加载期间如果被停止或换歌，旧的那一次自动作废
 function curSrc() {
   if (remoteAudio && !remoteAudio.paused && remoteSong) return { a: remoteAudio, l: remoteLines, who: remoteWho, song: remoteSong, local: false };
   if (audio && !audio.paused && current) return { a: audio, l: lines, who: '', song: current, local: true };
@@ -94,6 +95,7 @@ function lyricNow() {
   return { cur: i >= 0 ? (s.l[i].text || '♪') : '♪ 前奏 ♪', next, idx: i, ri: i >= 0 ? s.l[i].ri : -1, who: s.who, song: s.song.name, t: s.a.currentTime, local: s.local };
 }
 function tickLyrics() {
+  syncDuck();
   const L = lyricNow(); if (!L) return;
   showBar(L.cur, L.who);
   const pl = $('karaokeLyrics'); if (pl && L.local && pl.textContent !== L.cur) pl.textContent = L.cur;
@@ -101,17 +103,21 @@ function tickLyrics() {
 
 async function play(songName, pos, quiet) {   // quiet=true：只在本机试听，不通知房间里的其他人（GM 校准用）
   const song = SONGS[songName]; if (!song || !audio) return false;
-  current = song; lines = await loadLrc(song);
+  const my = ++playSeq; remoteStop();          // 本机开唱：先停掉别人的伴奏，避免两份伴奏叠在一起
+  current = song; const ln = await loadLrc(song);
+  if (my !== playSeq) return false;            // 加载歌词期间被暂停 / 换歌了：放弃这一次
+  lines = ln;
   const t = $('karaokeTitle'); if (t) t.textContent = song.name + ' — ' + song.artist;
   const url = new URL(song.mp3, document.baseURI).href;
   if (audio.src !== url) audio.src = url;
   audio.volume = Math.max(0, Math.min(1, fx.accVol));
   if (typeof pos === 'number' && isFinite(pos)) { try { audio.currentTime = Math.max(0, pos); } catch (e) {} }   // pos=0 也要重置（同一首歌第二次播放必须回到开头）
-  try { await audio.play(); } catch (e) { setStatus('请点一下屏幕后再点「播放」'); return false; }
+  try { await audio.play(); } catch (e) { if (my !== playSeq) return false; setStatus('请点一下屏幕后再点「播放」'); return false; }
+  if (my !== playSeq) { audio.pause(); return false; }
   if (!quiet) listeners.local.forEach(f => f('play', song.name));
   return true;
 }
-function pause(quiet) { if (audio) audio.pause(); showBar(''); if (!quiet) listeners.local.forEach(f => f('stop')); }
+function pause(quiet) { playSeq++; if (audio) audio.pause(); showBar(''); if (!quiet) listeners.local.forEach(f => f('stop')); }
 function seek(t) { if (audio && current) { try { audio.currentTime = Math.max(0, t); } catch (e) {} } }
 function duration() { return audio && audio.duration && isFinite(audio.duration) ? audio.duration : 0; }
 function position() { return audio && current ? audio.currentTime : 0; }
@@ -124,13 +130,19 @@ const remoteAudio = new Audio(); remoteAudio.preload = 'auto';
 let remoteLines = [], remoteWho = '';
 async function remoteStart(songName, pos, who, fromId) {
   const song = SONGS[songName]; if (!song) return false;
-  remoteSong = song; remoteFrom = fromId; remoteWho = who || ''; remoteLines = await loadLrc(song);
+  const my = ++remoteSeq;
+  remoteSong = song; remoteFrom = fromId; remoteWho = who || '';
+  const ln = await loadLrc(song); if (my !== remoteSeq) return true;   // 加载期间被停止 / 换人了：不要再偷偷放出来
+  remoteLines = ln;
   const url = new URL(song.mp3, document.baseURI).href;
   if (remoteAudio.src !== url) remoteAudio.src = url;
   remoteAudio.volume = Math.max(0, Math.min(1, .85 * fx.accVol));
   const go = () => { try { remoteAudio.currentTime = Math.max(0, pos); } catch (e) {} return remoteAudio.play(); };
   if (remoteAudio.readyState < 1) await new Promise(r => { remoteAudio.addEventListener('loadedmetadata', r, { once: true }); setTimeout(r, 4000); });
-  try { await go(); return true; } catch (e) { return false; }
+  if (my !== remoteSeq) return true;
+  try { await go(); } catch (e) { return my !== remoteSeq; }
+  if (my !== remoteSeq) { remoteAudio.pause(); }
+  return true;
 }
 function remoteSync(pos) {
   if (!remoteSong || remoteAudio.paused) return;
@@ -138,10 +150,21 @@ function remoteSync(pos) {
 }
 function remoteStop(fromId) {
   if (fromId && remoteFrom && fromId !== remoteFrom) return;
-  remoteAudio.pause(); remoteSong = null; remoteFrom = null; showBar('');
+  remoteSeq++; remoteAudio.pause(); remoteSong = null; remoteFrom = null; showBar('');
 }
 function remotePlaying() { return !!remoteSong; }
 function remoteFromId() { return remoteFrom; }
+function remoteActive() { return !!(remoteSong && !remoteAudio.paused && !remoteAudio.ended); }   // 真的在放别人的伴奏
+remoteAudio.addEventListener('ended', () => { remoteSong = null; remoteFrom = null; showBar(''); });   // 放完自动清掉，不再残留「还在听某人」的状态
+
+/* 背景音乐避让：本机伴奏或别人的伴奏只要有一个在播，背景音乐就淡出；都停了再淡入 */
+let lastDuck = null;
+function syncDuck() {
+  const d = !!((audio && !audio.paused) || !remoteAudio.paused);
+  if (d === lastDuck) return; lastDuck = d;
+  if (window.Music && Music.duck) Music.duck(d);
+}
+[audio, remoteAudio].forEach(a => a && ['play', 'playing', 'pause', 'ended', 'emptied', 'error'].forEach(ev => a.addEventListener(ev, syncDuck)));
 
 /* ---------- 音效：混响 / 回声 / 音色 / 混音（所有听众听到的是处理后的声音） ---------- */
 const lsGet2 = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
@@ -389,7 +412,7 @@ window.Karaoke = {
   lyricNow, setSongConfig, applyLocal, getSongConfig, songNames, rawLrc, fileLrc, onCfg(f) { listeners.cfg.push(f); },
   micOn, micOff, micStream: micStreamNow, micLevel,
   fx: { get: () => Object.assign({}, fx), set: setFx, presets: PRESETS, onChange(f) { listeners.fx.push(f); } }, mountFx,
-  remoteStart, remoteSync, remoteStop, remotePlaying, remoteFromId,
+  remoteStart, remoteSync, remoteStop, remotePlaying, remoteFromId, remoteActive,
   onMic(f) { listeners.mic.push(f); }, onLocal(f) { listeners.local.push(f); },
 };
 })();
