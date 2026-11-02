@@ -276,7 +276,7 @@ function openSongs() {
     const b = document.createElement('button'); b.className = 'song'; b.append(s.name); const sm = document.createElement('small'); sm.textContent = s.artist + ' · ' + fmtT(s.dur) + (s.acc ? ' · 🎵有伴奏' : ' · 清唱'); b.appendChild(sm);
     b.onclick = () => enqueueMe(s); l.appendChild(b);
   });
-  $('songHint').textContent = (G.scene.private ? '包间点歌：' : '点歌排队（同一张地图的玩家共用一个队列）：') + '轮到你时有 25 秒走上舞台；上台后演唱时间 = 整首歌的时长，电视和左上角都有倒数；台上只有演唱者，其他人在台下观看。目前只有《小幸运》有伴奏，其余歌曲是清唱。';
+  $('songHint').textContent = (G.scene.private ? '包间点歌：' : '点歌排队（同一张地图的玩家共用一个队列）：') + '轮到你时有 25 秒走上舞台；上台后演唱时间 = 整首歌的时长，电视和左上角都有倒数；台上只有演唱者，其他人在台下观看。上台后会自动开麦克风并播放伴奏。';
   $('songPanel').hidden = false; qKey = ''; renderQueue();
 }
 

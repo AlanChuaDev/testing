@@ -27,8 +27,8 @@
 
 
 ## K 歌测试模块（新增）
-- `assets/songs/xiaoxingyun.mp3`：测试歌曲《小幸运》
-- `assets/songs/xiaoxingyun.lrc`：对应时间轴歌词
+- `assets/songs/*.mp3`：24 首歌的伴奏，文件名是拼音（例如 xiaoxingyun.mp3 = 《小幸运》）
+- `assets/songs/*.lrc`：对应时间轴歌词
 - `js/karaoke-audio.js`：本地音频播放、LRC 同步歌词、麦克风权限/采集开关
 - Android 构建 workflow 增加 `RECORD_AUDIO` 与 `MODIFY_AUDIO_SETTINGS` 权限
 
@@ -47,7 +47,7 @@
 - 密钥只在服务器验证，客户端代码里没有。Render 上设置环境变量：
   - `GM_KEY`：GM 密钥（必填，不设置则 GM 功能关闭）。请用较长的随机字符串。
   - `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`：可选，Upstash Redis 的地址和令牌。设置后配置永久保存；不设置则只存在服务器本地文件，Render 免费版休眠或重启后会丢，需要重新保存。
-- 舞台大电视（广场舞台和 KTV 包间共用同一块屏）：有伴奏播放时显示当前句和下一句，没有伴奏时保持原来的版面。目前只有《小幸运》有伴奏和歌词。
+- 舞台大电视（广场舞台和 KTV 包间共用同一块屏）：有伴奏播放时显示当前句和下一句，没有伴奏时保持原来的版面。目前 24 首歌都有伴奏和歌词。
 
 
 

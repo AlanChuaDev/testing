@@ -298,7 +298,7 @@ function singWatch() {
     autoSing = true; const song = (G.stg && G.stg.song) || '';
     Karaoke.micOn().catch(() => toast('麦克风没开成功，好友听不到你', 2500));
     if (Karaoke.hasSong(song)) Karaoke.play(song, 0);
-    else toast('《' + song + '》暂无伴奏文件，这一首是清唱 🎤（目前只有《小幸运》有伴奏）', 3600);
+    else toast('《' + song + '》暂无伴奏文件，这一首是清唱 🎤', 3600);
   } else if (!now && wasSinging && autoSing) {
     autoSing = false; Karaoke.pause(); Karaoke.micOff();
   }
