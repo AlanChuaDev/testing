@@ -57,7 +57,9 @@ assets/songs/zuiluo.lrc
 assets/songs/zuiluo.mp3
 css/style.css
 index.html
+js/auth.js
 js/boutique.js
+js/firebase-config.js
 js/game.js
 js/glbchar.js
 js/gm.js
@@ -69,6 +71,7 @@ js/music.js
 js/net-config.js
 js/net.js
 js/plaza.js
+js/profile.js
 js/scene-bukit-bintang.js
 js/scene-common.js
 js/scene-klcc.js
@@ -80,3 +83,4 @@ js/team.js
 js/world.js
 package.json
 server.js
+social.js

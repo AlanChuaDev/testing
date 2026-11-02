@@ -233,3 +233,19 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 #gmPanel input[type=range]{flex:1;min-width:0;accent-color:#ff7ad1;height:24px;padding:0;background:none;border:0}
 #gmPanel #gmSeekT{min-width:78px;text-align:right;font-variant-numeric:tabular-nums}
 
+
+/* 资料 / 好友 / 私信（profile.js） */
+.pfBody{overflow-y:auto;padding-bottom:10px}.pfPad{padding:10px 14px}
+.pfPad label{display:block;margin:10px 0 4px;font-size:12px;font-weight:700;opacity:.75}
+.pfPad input[type=text],.pfPad input[type=email],.pfPad input[type=password],.pfPad textarea,.pfPad select{width:100%;box-sizing:border-box;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:#0003;color:var(--ink);font:inherit}
+.pfPad textarea{resize:none}.pfRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.pfRow input{flex:1;min-width:0}
+.pfVis{display:flex;gap:6px;flex-wrap:wrap}.pfSave{margin-top:12px;padding:9px 18px}
+.pfAcct{border-top:1px solid var(--line);margin-top:10px}.pfAcct input{margin:4px 0}
+.pfName{font-size:18px;margin:2px 0 8px}.pfBio{white-space:pre-wrap;word-break:break-word}.pfPad a{color:var(--cy)}
+.frRow{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #ffffff12}.frN{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.frDot{width:9px;height:9px;border-radius:50%;background:#777;flex:none}.frDot.on{background:#37e07a;box-shadow:0 0 6px #37e07a}
+.frUn{background:#ff3b5c;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px}
+[data-act="friends"]{position:relative}[data-act="friends"] .dot{position:absolute;top:4px;right:6px;width:10px;height:10px;border-radius:50%;background:#ff3b5c;box-shadow:0 0 0 2px #0008}
+#dmP .pfBody{display:flex;flex-direction:column;height:60vh}.dmList{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.dmMsg{display:flex}.dmMsg span{max-width:78%;padding:6px 11px;border-radius:14px;background:#ffffff1c;word-break:break-word}.dmMsg.me{justify-content:flex-end}.dmMsg.me span{background:linear-gradient(#ff7ad1,#c63aa6)}
+.dmForm{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--line)}.dmForm input{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:#0003;color:var(--ink);font:inherit}

@@ -132,6 +132,13 @@ function filterText(s) {
   return { text: b.text, hit: a.hit || b.hit };
 }
 
+// ---------- 账号 / 好友 / 私信（Firebase）----------
+let SocialMod = null; try { SocialMod = require("./social.js"); } catch (e) { console.warn("social.js not found:", e.message); }
+const AUTH = SocialMod ? SocialMod.createAuth() : null;
+const S = AUTH ? SocialMod.create({ store: AUTH.store, filterText }) : null;
+const UE = (m) => { const e = new Error(m); e.user = true; return e; };
+const byPubWs = new Map(); // pub -> 当前在线的连接（登录用户）
+
 // ---------- 基础 ----------
 const httpServer = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
@@ -210,6 +217,15 @@ function pushOnline() { // 全服在线人数（防抖）
     const n = wss.clients.size;
     for (const c of wss.clients) send(c, { type: "online", n });
   }, 800);
+}
+
+const withPresence = (v) => { v.friends.forEach((f) => { const w = byPubWs.get(f.pub); f.online = !!w; f.room = w ? w.room : null; }); return v; };
+async function pushFriends(pub) { // 把最新的好友列表推给在线的人
+  const w = byPubWs.get(pub); if (!w || !S) return;
+  const v = await S.friendsView(pub); w.friendSet = new Set(v.friends.map((f) => f.pub)); send(w, Object.assign({ type: "friends" }, withPresence(v)));
+}
+function presence(ws) { // 我上线 / 下线 / 换地图：告诉在线的好友
+  for (const p of ws.friendSet || []) { const w = byPubWs.get(p); if (w) send(w, { type: "presence", pub: ws.pub, name: ws.name, online: !ws.closed, room: ws.closed ? null : ws.room }); }
 }
 
 // ---------- 舞台队列（服务器说了算：每个房间一个队列）----------
@@ -370,7 +386,8 @@ wss.on("connection", (ws) => {
   send(ws, { type: "songcfg", cfg: songCfg }); // 新玩家一连上就拿到 GM 保存的歌词 / 延迟
   pushOnline();
 
-  ws.on("message", (raw) => {
+  ws.q = Promise.resolve();
+  const onMessage = async (raw) => {
     // 简单限速：每秒最多 60 条
     const now = Date.now();
     if (now - ws.msgWindow > 1000) { ws.msgWindow = now; ws.msgCount = 0; }
@@ -382,23 +399,35 @@ wss.on("connection", (ws) => {
 
     if (m.type === "ping") return send(ws, { type: "pong", t: m.t, ts: Date.now() });
 
-    // 身份：设备 uid 只在这里换成 pub（不公开的哈希），别人只能看到 pub
+    // 身份：登录用户用 Firebase 凭证验证；没登录（Firebase 没加载 / 没配置）就是游客，只能玩基础功能
     if (m.type === "hello") {
-      const uid = String(m.uid || "");
-      if (uid.length >= 8 && uid.length <= 80) {
-        if (ws.helloDone && ws.pub !== pubOf(uid)) return; // 不允许中途换身份
-        ws.pub = pubOf(uid);
-      }
+      if (ws.helloDone) return;
       ws.helloDone = true;
-      ws.name = cleanName(m.name);
-      ws.blocks = new Set((Array.isArray(m.blocks) ? m.blocks : []).slice(0, 200).map((x) => String(x).slice(0, 16)));
-      send(ws, { type: "hello_ok", pub: ws.pub });
+      if (m.token && AUTH) {
+        try { const a = await AUTH.verify(m.token); ws.fuid = a.uid; ws.pub = pubOf("fb:" + a.uid); ws.authed = true; ws.acct = { anon: a.anon, email: a.email }; }
+        catch (e) { send(ws, { type: "auth_fail", message: "登录凭证无效，已作为游客进入" }); }
+      }
+      if (!ws.authed) { const uid = String(m.uid || ""); if (uid.length >= 8 && uid.length <= 80) ws.pub = pubOf(uid); ws.name = cleanName(m.name); ws.blocks = new Set((Array.isArray(m.blocks) ? m.blocks : []).slice(0, 200).map((x) => String(x).slice(0, 16))); }
+      else {
+        try {
+          const prof = await S.ensureProfile(ws.pub, m.name); ws.name = prof.name;
+          const bl = await S.getBlocks(ws.pub); let list = bl.list;
+          if (!bl.exists && Array.isArray(m.blocksDetail) && m.blocksDetail.length) list = (await S.setBlocks(ws.pub, m.blocksDetail)).list;
+          ws.blocks = new Set(list.map((x) => x.pub)); send(ws, { type: "blocks_sync", list });
+          byPubWs.set(ws.pub, ws);
+          send(ws, { type: "me_profile", profile: S.publicMe(prof), acct: ws.acct });
+          await pushFriends(ws.pub); presence(ws);
+        } catch (e) { console.error("account load failed:", e.message); ws.authed = false; ws.name = cleanName(m.name); ws.blocks = new Set(); send(ws, { type: "auth_fail", message: "账号服务暂时不可用，已作为游客进入" }); }
+      }
+      send(ws, { type: "hello_ok", pub: ws.pub, authed: !!ws.authed });
       attachTeam(ws, m.team);
       return;
     }
 
-    if (m.type === "blocks") { // 更新黑名单
-      ws.blocks = new Set((Array.isArray(m.list) ? m.list : []).slice(0, 200).map((x) => String(x).slice(0, 16)));
+    if (m.type === "blocks") { // 更新黑名单（登录用户会保存到账号里）
+      const detail = (Array.isArray(m.detail) ? m.detail : (Array.isArray(m.list) ? m.list.map((x) => ({ pub: x })) : []));
+      if (ws.authed) { const r = await S.setBlocks(ws.pub, detail); ws.blocks = new Set(r.list.map((x) => x.pub)); for (const rp of r.removed) { pushFriends(rp); } pushFriends(ws.pub); }
+      else ws.blocks = new Set(detail.slice(0, 200).map((x) => String(x.pub).slice(0, 16)));
       const t = teamOfWs(ws);
       if (t) for (const mem of t.members.values()) if (ws.blocks.has(mem.pub)) { teamRemove(t, ws.pub, "你拉黑了队友，已退出队伍"); break; }
       return;
@@ -445,7 +474,7 @@ wss.on("connection", (ws) => {
       leaveRoom(ws);
       if (!rooms.has(room)) rooms.set(room, new Map());
       const players = rooms.get(room);
-      ws.name = cleanName(m.name);
+      if (!ws.authed) ws.name = cleanName(m.name);
       ws.info = { name: ws.name, outfit: cleanOutfit(m.outfit), pub: ws.pub };
       // 告诉新玩家：房间里已有的人
       for (const [pid, p] of players.entries()) {
@@ -459,6 +488,7 @@ wss.on("connection", (ws) => {
       const st = stages.get(room);
       send(ws, Object.assign({ type: "stage" }, st ? stageView(st) : { queue: [], cur: null, ts: Date.now() }));
       const t = teamOfWs(ws); if (t) { const mem = t.members.get(ws.pub); if (mem) mem.name = ws.name; teamSend(t); } // 队友能看到我在哪张地图
+      presence(ws);
       return;
     }
 
@@ -555,25 +585,67 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // ----- 资料 / 好友 / 私信（需要登录）-----
+    if (/^(profile_|name_set|friends?_|dm_)/.test(m.type)) {
+      if (!S) throw UE("社交功能暂未开启");
+      if (!ws.authed) throw UE("请先登录：点左上角「我」→ 账号");
+      const pubArg = () => { const p = String(m.pub || "").slice(0, 16); if (!/^[0-9a-f]{16}$/.test(p)) throw UE("参数不对"); return p; };
+      if (m.type === "profile_get") { const pub = m.pub ? pubArg() : ws.pub; return send(ws, { type: "profile", pub, profile: await S.viewProfile(ws.pub, pub) }); }
+      if (m.type === "profile_set") { const p = await S.setProfile(ws.pub, m); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true }); }
+      if (m.type === "name_set") {
+        const p = await S.setName(ws.pub, m.name); ws.name = p.name;
+        if (ws.info) ws.info.name = p.name; const pl = ws.room && rooms.get(ws.room)?.get(ws.playerId); if (pl) pl.info.name = p.name;
+        if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: p.name }, ws);
+        const t = teamOfWs(ws); if (t) { const mem = t.members.get(ws.pub); if (mem) mem.name = p.name; teamSend(t); }
+        presence(ws); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true, renamed: true });
+      }
+      if (m.type === "friends_get") { const v = await S.friendsView(ws.pub); ws.friendSet = new Set(v.friends.map((f) => f.pub)); return send(ws, Object.assign({ type: "friends" }, withPresence(v))); }
+      if (m.type === "friend_request") {
+        const to = pubArg(), r = await S.request(ws.pub, to), tw = byPubWs.get(to);
+        if (r.auto) { send(ws, { type: "toast", message: "你们已成为好友 🎉" }); if (tw) send(tw, { type: "toast", message: ws.name + " 和你成为了好友 🎉" }); }
+        else { send(ws, { type: "toast", message: "已发送好友申请" }); if (tw) send(tw, { type: "friend_req", pub: ws.pub, name: ws.name }); }
+        await pushFriends(ws.pub); await pushFriends(to); return;
+      }
+      if (m.type === "friend_accept") { const from = pubArg(); await S.accept(ws.pub, from); const fw = byPubWs.get(from); send(ws, { type: "toast", message: "已添加好友 🎉" }); if (fw) send(fw, { type: "toast", message: ws.name + " 同意了你的好友申请 🎉" }); await pushFriends(ws.pub); await pushFriends(from); presence(ws); return; }
+      if (m.type === "friend_decline") { const from = pubArg(); await S.decline(ws.pub, from); await pushFriends(ws.pub); await pushFriends(from); return; }
+      if (m.type === "friend_remove") { const o = pubArg(); await S.unfriend(ws.pub, o); await pushFriends(ws.pub); await pushFriends(o); return; }
+      if (m.type === "dm_send") {
+        const to = pubArg(), text = String(m.text || "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 200);
+        if (!text) return;
+        const tw = byPubWs.get(to); if (tw && isBlocked(ws, tw)) throw UE("对方没有收到这条消息");
+        const g = chatGate(ws, text); if (!g.ok) throw UE(g.msg);
+        const r = await S.sendDm(ws.pub, to, g.text);
+        send(ws, { type: "dm", pub: to, mine: true, text: g.text, at: r.at });
+        if (tw) send(tw, { type: "dm", pub: ws.pub, name: ws.name, mine: false, text: g.text, at: r.at });
+        return;
+      }
+      if (m.type === "dm_history") { const o = pubArg(); return send(ws, { type: "dm_history", pub: o, msgs: await S.dmHistory(ws.pub, o, 50) }); }
+      if (m.type === "dm_read") { await S.dmRead(ws.pub, pubArg()); return; }
+      return;
+    }
+
     // ----- 举报 -----
     if (m.type === "report") {
-      const target = byPid.get(String(m.pid));
-      if (!target || target === ws) return;
+      let target = byPid.get(String(m.pid)); const tpub = target ? target.pub : String(m.pub || "").slice(0, 16);
+      if (!target && !(/^[0-9a-f]{16}$/.test(tpub) && S && ws.authed)) return;
+      if (target === ws || tpub === ws.pub) return;
       const reason = ["harass", "porn", "ad", "other"].includes(m.reason) ? m.reason : "other";
       const nowT = Date.now();
       ws.repLog = (ws.repLog || []).filter((t) => nowT - t < 3600000);
       if (ws.repLog.length >= 10) return send(ws, { type: "error", message: "举报太频繁，请稍后再试" });
-      const list = (reportsOn.get(target.pub) || []).filter((r) => nowT - r.at < 30 * 60000);
+      const list = (reportsOn.get(tpub) || []).filter((r) => nowT - r.at < 30 * 60000);
       if (list.some((r) => r.by === ws.pub)) return send(ws, { type: "toast", message: "你已经举报过这位玩家了，我们会处理" });
-      ws.repLog.push(nowT); list.push({ by: ws.pub, at: nowT }); reportsOn.set(target.pub, list);
-      const rec = { at: new Date(nowT).toISOString(), reporter: ws.pub, reporterName: ws.name, target: target.pub, targetName: target.name, reason, room: target.room, recent: target.recent.slice(-5) };
+      ws.repLog.push(nowT); list.push({ by: ws.pub, at: nowT }); reportsOn.set(tpub, list);
+      const tname = target ? target.name : ((await S.getProfile(tpub)) || {}).name || "玩家";
+      const recent = target ? target.recent.slice(-5) : await S.dmEvidence(tpub, ws.pub, 5);
+      const rec = { at: new Date(nowT).toISOString(), reporter: ws.pub, reporterName: ws.name, target: tpub, targetName: tname, reason, room: target ? target.room : null, recent };
       reportLog.push(rec); if (reportLog.length > 300) reportLog.shift();
       persistReport(rec);
       const distinct = new Set(list.map((r) => r.by)).size;
       if (distinct >= REPORT_MUTE_N) {
-        mutes.set(target.pub, nowT + MUTE_MS);
-        send(target, { type: "error", message: "你被多名玩家举报，已被临时禁言 15 分钟" });
-        console.log("AUTO-MUTE", target.pub, target.name, "reports=" + distinct);
+        mutes.set(tpub, nowT + MUTE_MS);
+        if (target) send(target, { type: "error", message: "你被多名玩家举报，已被临时禁言 15 分钟" });
+        console.log("AUTO-MUTE", tpub, tname, "reports=" + distinct);
       }
       send(ws, { type: "toast", message: "已收到举报，谢谢你。你也可以直接拉黑对方" });
       return;
@@ -631,8 +703,10 @@ wss.on("connection", (ws) => {
       }, ws, ws);
       return;
     }
-  });
+  };
 
+  // 同一个连接的消息按顺序处理（hello 要先于 join 处理完）
+  ws.on("message", (raw) => { ws.q = ws.q.then(() => onMessage(raw)).catch((e) => { if (e && e.user) send(ws, { type: "error", message: e.message }); else console.error("handler error:", e); }); });
   ws.on("close", () => onClose(ws));
   ws.on("error", () => onClose(ws));
 });
@@ -654,6 +728,7 @@ function onClose(ws) {
   if (ws.closed) return; ws.closed = true;
   leaveRoom(ws);
   byPid.delete(ws.playerId);
+  if (ws.authed && byPubWs.get(ws.pub) === ws) { byPubWs.delete(ws.pub); presence(ws); }
   const t = teamOfWs(ws);
   if (t) { const m = t.members.get(ws.pub); if (m && m.pid === ws.playerId) { m.pid = null; m.offlineAt = Date.now(); teamSend(t); } }
   pushOnline();

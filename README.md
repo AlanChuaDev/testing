@@ -55,3 +55,9 @@
 - `js/songs.js`：歌曲表（歌名 / 歌手 / 时长 / 是否有伴奏），前端和服务器共用。
 - `js/team.js`：组队、点击玩家菜单、举报 / 拉黑、说话指示。
 - `CHANGELOG.md`：每次更新了什么。
+
+
+## 账号 / 好友 / 私信（v4）
+- 前端：`js/firebase-config.js`（公开配置）、`js/auth.js`（登录）、`js/profile.js`（资料 / 好友 / 私信界面）。
+- 服务器：`social.js`（昵称唯一、资料、好友、私信、拉黑存取）+ `server.js`；用 `firebase-admin` 验证登录并读写 Firestore。
+- Render 环境变量：`FIREBASE_SERVICE_ACCOUNT`（服务账号 JSON 整段粘贴，不要放进 GitHub）。`DEV_AUTH=1` 只用于本机测试，线上不要设置。

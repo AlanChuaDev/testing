@@ -18,7 +18,7 @@ const toast = (m, ms) => window.__game && __game.api ? __game.api.toast(m, ms) :
 /* ================= 黑名单 ================= */
 let blocks = lsGet('sc_blocks', []);            // [{ pub, name }]
 const blockSet = () => new Set(blocks.map(b => b.pub));
-function saveBlocks() { lsSet('sc_blocks', blocks); Net.send({ type: 'blocks', list: blocks.map(b => b.pub) }); renderBlockList(); }
+function saveBlocks() { lsSet('sc_blocks', blocks); Net.send({ type: 'blocks', list: blocks.map(b => b.pub), detail: blocks }); renderBlockList(); }
 function block(pub, name, pid) {
   if (!pub || blockSet().has(pub)) return;
   blocks.push({ pub, name: String(name || '玩家').slice(0, 12) }); saveBlocks();
@@ -47,7 +47,7 @@ const isLeader = () => !!(T && T.leader === me().pub);
 
 window.Team = { inTeam: () => !!T, debug: () => ({ peers: [...peers].map(([k, p]) => [k.slice(0, 6), p.pc.connectionState, p.pc.iceConnectionState, !!p.audio, !!p.an]), mic: micOn, spk: spkOn, members: T && T.members.map(m => [m.name, (m.pid || '').slice(0, 6), m.online]), me: Net.myId().slice(0, 6) }) };
 window.Social = {
-  hello: () => ({ blocks: blocks.map(b => b.pub), team: savedTeam() }),
+  hello: () => ({ blocks: blocks.map(b => b.pub), blocksDetail: blocks, team: savedTeam() }),
   isBlocked: pub => !!pub && blockSet().has(pub),
   block, unblock, list: () => blocks.slice(),
   openMenu: e => openPlayerMenu(e),
@@ -168,6 +168,7 @@ Net.on('team', m => {
   else { syncPeers(); }
   renderHud(); renderPanel();
 });
+Net.on('blocks_sync', m => { blocks = (m.list || []).map(b => ({ pub: b.pub, name: b.name })); lsSet('sc_blocks', blocks); renderBlockList(); });   // 登录用户的黑名单以服务器为准
 Net.on('team_invited', m => showInvite(m));
 Net.on('team_sent', m => toast('已向 ' + m.name + ' 发出组队邀请', 1800));
 Net.on('team_msg', m => { toast(m.text, 2200); __game.api.addMsg('team', '', m.text, false, true); });
@@ -264,9 +265,19 @@ function menuMain() {
   const btn = (text, fn, cls, dis) => h('button', { class: 'pmBtn ' + (cls || ''), type: 'button', text, onclick: fn, disabled: dis ? '' : null });
   body.append(
     btn('🤝 组队邀请' + (reason ? '（' + reason + '）' : ''), () => { Net.send({ type: 'team_invite', to: e.pid }); closeMenu(); }, '', !canInvite),
+    ...friendButtons(e, btn),
     btn('🚩 举报', menuReport, 'warn', !e.pub),
     blocked ? btn('✅ 取消拉黑', () => { unblock(e.pub); menuMain(); }) : btn('🚫 拉黑', () => { block(e.pub, e.name, e.pid); closeMenu(); }, 'warn', !e.pub),
     h('p', { class: 'hint', text: '查看资料、加好友、私信：之后的版本开放。' }));
+}
+function friendButtons(e, btn) {                  // 查看资料 / 加好友 / 私信（profile.js 提供）
+  const F = window.Friends; if (!F || !e.pub) return [];
+  const rel = F.relation(e.pub), ok = F.authed && !Social.isBlocked(e.pub);
+  return [
+    btn('👤 查看资料', () => { closeMenu(); F.viewProfile(e.pub); }, '', !F.authed),
+    rel === 'friend' ? btn('💬 私信', () => { closeMenu(); F.openDm(e.pub, e.name); }, '', !ok)
+      : btn(rel === 'out' ? '⏳ 好友申请已发送' : rel === 'in' ? '✅ 同意 TA 的好友申请' : '➕ 加好友', () => { if (rel === 'in') Net.send({ type: 'friend_accept', pub: e.pub }); else Net.send({ type: 'friend_request', pub: e.pub }); closeMenu(); }, '', !ok || rel === 'out'),
+  ];
 }
 function menuReport() {
   const e = menuEnt, body = $('pmBody'); body.textContent = '';

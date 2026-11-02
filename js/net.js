@@ -52,13 +52,15 @@ function connect() {
   const mine = ws;
   clearTimeout(coldT);
   coldT = setTimeout(() => { if (!ws || ws.readyState !== 1) toast('服务器唤醒中…免费版首次约需 30–60 秒', 5000); }, 4000);
-  ws.onopen = () => {
+  ws.onopen = async () => {
     if (ws !== mine) return;
     const wasRetry = retry > 0;
     retry = 0; clearTimeout(coldT); setOnline(true); lastRx = Date.now(); toast(wasRetry ? '已重新连接 ✅' : '已连接服务器 ✅', 1800);
     ping(); clearInterval(hello); hello = setInterval(ping, 8000);
     const P = window.Profile || {};
-    sendRaw(Object.assign({ type: 'hello', uid: P.uid || '', name: P.name || '玩家' }, social().hello()));   // 身份 + 黑名单 + 上次的队伍（服务器重启 / 掉线后自动归队）
+    let token = null; try { token = window.Auth ? await Auth.getToken() : null; } catch (e) {}   // Firebase 登录凭证；拿不到就当游客
+    if (ws !== mine || ws.readyState !== 1) return;
+    sendRaw(Object.assign({ type: 'hello', uid: P.uid || '', token, name: P.name || '玩家' }, social().hello()));   // 身份 + 黑名单 + 上次的队伍（服务器重启 / 掉线后自动归队）
     joinedRoom = null; inRoom = false; joinRoom();
     emit('_open');
   };
@@ -109,6 +111,7 @@ function onMsg(m) {
     case 'online': totalOnline = m.n || 0; refreshCount(); break;
     case 'playerJoined': addRemote(m.playerId, m.info || {}, m.state); break;
     case 'playerLeft': dropRemote(m.playerId); break;
+    case 'rename': { const e = remotes.get(m.playerId); if (e) e.name = m.name; break; }
     case 'state': { const e = remotes.get(m.playerId); if (e && m.state) applyState(e, m.state, false); break; }
     case 'outfit': { const e = remotes.get(m.playerId); if (e) { e.outfit = Object.assign({}, e.outfit, m.outfit); api.applyOutfit(e.inst, e.outfit); } break; }
     case 'chat': {
@@ -325,6 +328,7 @@ window.Net = {
     emit('_scene', { id });
   },
   sendChat, refresh: refreshCount,
+  reauth() { retry = 0; try { if (ws) ws.close(); else connect(); } catch (e) {} },
   send: sendRaw,
   on(type, fn) { (hooks[type] = hooks[type] || []).push(fn); },
   now: serverNow, dropVoice(pid) { closeIn(pid); closeOut(pid, true); },

@@ -497,7 +497,7 @@ function bindInput() {
     else if (a === 'wardrobe') openWardrobe();
     else if (a === 'chat') { $('chatIn').focus(); }
     else if (a === 'chorus') toast(G.scene.private ? '合唱：先在点歌机点歌，邀请好友后可一起上台（开发中）' : '合唱要在 KTV 大堂里使用，进去试试吧 🎤');
-    else if (a === 'friends') toast('好友 / 私信：之后的版本开放。现在可以点场景里的玩家 → 组队、举报、拉黑');
+    else if (a === 'friends') { if (window.Friends) Friends.open(); }
     else if (a === 'gift') toast('礼物商店：之后接入金币和道具 🎁');
   });
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; G.tab = b.dataset.ch; [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b)); renderLog(); });
@@ -505,6 +505,7 @@ function bindInput() {
   $('chatIn').addEventListener('keydown', e => e.stopPropagation());
   document.querySelectorAll('[data-close]').forEach(b => b.onclick = closePanels);
   $('timeChip').onclick = () => { const order = ['auto', 'day', 'dusk', 'night'], i = (order.indexOf(G.timeMode) + 1) % 4; G.timeMode = order[i]; if (G.timeMode === 'day') G.hour = 12.5; if (G.timeMode === 'dusk') G.hour = 18.4; if (G.timeMode === 'night') G.hour = 22; updateClock(); };
+  $('card').onclick = () => { if (window.Friends) Friends.openMe(); };
   $('serverBtn').onclick = () => toast(window.Net && Net.connected ? '已连接服务器 ✅' : '未连接服务器（离线单机）', 2200);
   $('gear').onclick = () => { $('setPanel').hidden = false; syncSeg(); };
   const seg = (id, key, fn) => $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; fn(parseFloat(b.dataset.v)); syncSeg(); });
