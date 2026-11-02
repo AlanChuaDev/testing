@@ -509,7 +509,64 @@ wss.on("connection", (ws) => {
     // GM 查看举报记录
     if (m.type === "gm_reports") {
       if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
-      return send(ws, { type: "gmReports", list: reportLog.slice(-50) });
+      return send(ws, { type: "gmReports", list: reportLog.slice(-50).map((r,i)=>Object.assign({ _idx: Math.max(0,reportLog.length-50)+i },r)) });
+    }
+
+    if (m.type === "gm_players") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const list = [...byPid.values()].filter(c => !c.closed).map(c => ({ pid:c.playerId, pub:c.pub, name:c.name, room:c.room, isGM:!!c.isGM, invisible:!!c.gmInvisible, state:c.room ? (rooms.get(c.room)?.get(c.playerId)?.state || null) : null }));
+      return send(ws, { type:"gmPlayers", list, n:list.length, invisible:!!ws.gmInvisible });
+    }
+
+    if (m.type === "gm_invisible") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      ws.gmInvisible = !!m.on;
+      const room = ws.room, players = room && rooms.get(room), ent = players && players.get(ws.playerId);
+      if (room && ent) {
+        if (ws.gmInvisible) sendToRoom(room, { type:"playerLeft", playerId:ws.playerId }, ws);
+        else sendToRoom(room, { type:"playerJoined", playerId:ws.playerId, info:ent.info, state:ent.state }, ws);
+      }
+      const rec={at:new Date().toISOString(),by:ws.name,action:ws.gmInvisible?"invisible_on":"invisible_off",target:ws.name,room};
+      gmActionLog.push(rec); if(gmActionLog.length>200)gmActionLog.shift();
+      return send(ws,{type:"gmInvisible",on:ws.gmInvisible});
+    }
+
+    if (m.type === "gm_profile") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const pub=String(m.pub||"").slice(0,16); if(!/^[0-9a-f]{16}$/.test(pub)||!S) return send(ws,{type:"gmProfile",pub,profile:null});
+      const profile=await S.getProfile(pub); // GM管理用途：返回完整资料，不套用玩家隐私过滤
+      const rec={at:new Date().toISOString(),by:ws.name,action:"view_private_profile",target:profile?.name||pub,room:ws.room};
+      gmActionLog.push(rec); if(gmActionLog.length>200)gmActionLog.shift();
+      return send(ws,{type:"gmProfile",pub,profile:profile?{name:profile.name,gender:profile.gender,bio:profile.bio,ig:profile.ig,fb:profile.fb,visibility:profile.visibility}:null});
+    }
+
+    if (m.type === "gm_report_action") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const idx=Number(m.index), action=String(m.action||"");
+      if(!Number.isInteger(idx)||idx<0||idx>=reportLog.length||!['handled','dismissed','mute','kick'].includes(action)) return send(ws,{type:"gmReportActionResult",ok:false,message:"举报或操作参数无效"});
+      const rec=reportLog[idx]; rec.status=action; rec.handledAt=new Date().toISOString(); rec.handledBy=ws.name;
+      const target=[...byPid.values()].find(c=>c.pub===rec.target);
+      if(action==='mute'&&target){mutes.set(target.pub,Date.now()+15*60000);send(target,{type:"error",message:"GM 已根据举报禁言你 15 分钟"});}
+      if(action==='kick'&&target){send(target,{type:"gmKicked",message:"你已被 GM 请出当前房间"});if(target.room)leaveRoom(target);}
+      const audit={at:rec.handledAt,by:ws.name,action:"report_"+action,target:rec.targetName,room:rec.room};gmActionLog.push(audit);if(gmActionLog.length>200)gmActionLog.shift();
+      return send(ws,{type:"gmReportActionResult",ok:true,message:"举报已更新为："+action});
+    }
+
+    if (m.type === "gm_announcement") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const text=String(m.text||"").replace(/[\u0000-\u001f<>]/g,"").trim().slice(0,120); if(!text)return send(ws,{type:"gmActionResult",ok:false,message:"公告内容不能为空"});
+      const notice={type:"gmNotice",name:ws.name,text,at:Date.now()}; for(const client of wss.clients)send(client,notice);
+      const rec={at:new Date().toISOString(),by:ws.name,action:"announcement",target:text,room:"全服"};gmActionLog.push(rec);if(gmActionLog.length>200)gmActionLog.shift();
+      return send(ws,{type:"gmActionResult",ok:true,message:"全服公告已发布"});
+    }
+
+    if (m.type === "gm_teleport") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const target=byPid.get(String(m.pid||"")); if(!target||target===ws) return send(ws,{type:"gmActionResult",ok:false,message:"目标玩家不在线或不能传送到自己"});
+      const ent=target.room&&rooms.get(target.room)?.get(target.playerId); if(!ent||!ent.state) return send(ws,{type:"gmActionResult",ok:false,message:"目标玩家位置暂不可用"});
+      send(ws,{type:"gmTeleport",room:target.room,state:ent.state,targetName:target.name});
+      const audit={at:new Date().toISOString(),by:ws.name,action:"teleport_to",target:target.name,room:target.room};gmActionLog.push(audit);if(gmActionLog.length>200)gmActionLog.shift();
+      return;
     }
 
     if (m.type === "join") {
@@ -523,11 +580,12 @@ wss.on("connection", (ws) => {
       ws.info = { name: ws.name, outfit: cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM };
       // 告诉新玩家：房间里已有的人
       for (const [pid, p] of players.entries()) {
+        if (p.ws.gmInvisible && !ws.isGM) continue;
         send(ws, { type: "playerJoined", playerId: pid, info: p.info, state: p.state });
       }
       ws.room = room;
       players.set(ws.playerId, { ws, info: ws.info, state: null });
-      sendToRoom(room, { type: "playerJoined", playerId: ws.playerId, info: ws.info, state: null }, ws);
+      if (!ws.gmInvisible) sendToRoom(room, { type: "playerJoined", playerId: ws.playerId, info: ws.info, state: null }, ws);
       send(ws, { type: "joined", room, playerId: ws.playerId });
       sendToRoom(room, { type: "count", n: players.size });
       const st = stages.get(room);
@@ -553,7 +611,7 @@ wss.on("connection", (ws) => {
       const st = cleanState(m.state);
       if (!st) return;
       p.state = st;
-      sendToRoom(ws.room, { type: "state", playerId: ws.playerId, state: st }, ws);
+      if (!ws.gmInvisible) sendToRoom(ws.room, { type: "state", playerId: ws.playerId, state: st }, ws);
       return;
     }
 
@@ -567,7 +625,7 @@ wss.on("connection", (ws) => {
       const g = chatGate(ws, text);
       if (!g.ok) return send(ws, { type: "error", message: g.msg });
       ws.recent.push({ ch, text, at: Date.now() }); if (ws.recent.length > 6) ws.recent.shift();
-      const msg = { type: "chat", playerId: ws.playerId, pub: ws.pub, name: ws.name, isGM: !!ws.isGM, ch, text: g.text };
+      const msg = { type: "chat", playerId: ws.playerId, pub: ws.pub, name: ws.gmInvisible ? "玩家" : ws.name, isGM: !!ws.isGM && !ws.gmInvisible, ch, text: g.text };
       if (ch === "world") {
         for (const c of wss.clients) if (c !== ws && !isBlocked(ws, c)) send(c, msg); // 世界频道：所有在线玩家（拉黑的人看不到）
       } else if (ch === "team") {

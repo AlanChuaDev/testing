@@ -129,6 +129,7 @@ function onMsg(m) {
     case 'rtc': if (m.role !== 'team') chain = chain.then(() => onRtc(m)).catch(() => {}); break;   // 队伍语音的信令交给 team.js（下面的 emit）
     case 'karaoke': onKaraoke(m); break;
     case 'songcfg': if (window.Karaoke) Karaoke.setSongConfig(m.cfg || {}); break;   // GM 保存的歌词 / 延迟
+    case 'gmNotice': toast('📣 GM全服公告：'+(m.text||''), 6000); break;
     case 'error': case 'toast': if (m.message) toast(m.message, 2500); break;
     default: break;
   }

@@ -4,7 +4,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let isGM = false, song = '', offset = 0, timer = 0, taTimer = 0;
-window.GM = { isGM: false };
+window.GM = { isGM: false, invisible: false };
 const msg = t => { const m = $('gmMsg'); if (m) m.textContent = t; };
 const loginMsg = t => { const m = $('gmLoginMsg'); if (m) m.textContent = t; };
 const clampOff = v => Math.max(-10000, Math.min(10000, Math.round(v)));
@@ -51,23 +51,53 @@ function tick() {                   // 面板打开时每 0.1 秒刷新：当前
   if (!seeking) { sk.max = d || 300; sk.value = pos; }
   $('gmSeekT').textContent = fmtT(pos) + ' / ' + fmtT(d);
 }
-function open() { $('setPanel').hidden = true; $('gmPanel').hidden = false; showEdit(isGM); if (!timer) timer = setInterval(tick, 100); }
+function open() { $('setPanel').hidden = true; $('gmPanel').hidden = false; showEdit(isGM); $('gmConsole').hidden = !isGM; if (!timer) timer = setInterval(tick, 100); }
 function stopPreview() { if (window.Karaoke && Karaoke.playing()) Karaoke.pause(true); }
 const fmtT = t => { t = Math.max(0, Math.floor(t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
 let seeking = false;
 
+function consoleMsg(t) { const el=$('gmConsoleMsg'); if(el) el.textContent=t; }
+function node(tag, cls, txt) { const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+function gmBtn(parent, label, fn) { const b=node('button','chip',label); b.type='button'; b.onclick=fn; parent.appendChild(b); return b; }
+function renderPlayers(list) {
+  const root=$('gmPlayers'); root.replaceChildren(); $('gmOnlineCount').textContent=String(list.length);
+  if(!list.length){root.textContent='当前没有在线玩家';return;}
+  list.forEach(p=>{const card=node('div','gmListItem'); const title=node('strong','',`${p.name||'玩家'}${p.isGM?' ✦GM':''}${p.invisible?'（隐身）':''}`);card.append(title,node('div','',`房间：${p.room||'未进入场景'} · ID ${String(p.pub||'').slice(0,7)}`));const row=node('div','gmRow');
+    gmBtn(row,'查看资料',()=>Net.send({type:'gm_profile',pub:p.pub}));
+    if(p.pid!==Net.myId()) { gmBtn(row,'传送到身边',()=>{if(!p.room)return consoleMsg('该玩家不在场景中');Net.send({type:'gm_teleport',pid:p.pid});}); gmBtn(row,'禁言15分',()=>Net.send({type:'gm_action',pid:p.pid,action:'mute',minutes:15}));gmBtn(row,'解除禁言',()=>Net.send({type:'gm_action',pid:p.pid,action:'unmute'}));gmBtn(row,'踢出房间',()=>{if(confirm('确定请出 '+p.name+'？'))Net.send({type:'gm_action',pid:p.pid,action:'kick'});}); }
+    card.appendChild(row);root.appendChild(card);
+  });
+}
+function renderReports(list) {
+  const root=$('gmReportsList');root.replaceChildren(); if(!list.length){root.textContent='目前没有举报记录';return;}
+  const names={harass:'骚扰/辱骂',porn:'色情内容',ad:'广告/刷屏',other:'其他'};
+  list.slice().reverse().forEach(r=>{const card=node('div','gmListItem');card.append(node('strong','',`${r.targetName||'玩家'} · ${names[r.reason]||r.reason||'其他'}`),node('div','',`举报人：${r.reporterName||'玩家'} · ${r.at||''}`),node('div','',`房间：${r.room||'未知'} · 状态：${r.status||'待处理'}`));if(r.recent&&r.recent.length)card.appendChild(node('div','',`证据：${r.recent.map(x=>x.name+': '+x.text).join(' | ')}`));const row=node('div','gmRow');
+    [['标记处理','handled'],['驳回','dismissed'],['禁言15分','mute'],['踢出房间','kick']].forEach(([label,action])=>gmBtn(row,label,()=>{if((action==='mute'||action==='kick')&&!confirm(`确认对 ${r.targetName} 执行${label}？`))return;Net.send({type:'gm_report_action',index:r._idx,action});}));card.appendChild(row);root.appendChild(card);
+  });
+}
 function bind() {
   $('gmOpen').onclick = open;
   const logBtn = $('gmLogRefresh'); if (logBtn) logBtn.onclick = () => Net.send({ type: 'gm_action_log' });
+  $('gmRefreshPlayers').onclick=()=>Net.send({type:'gm_players'});
+  $('gmRefreshReports').onclick=()=>Net.send({type:'gm_reports'});
+  $('gmRefreshAudit').onclick=()=>Net.send({type:'gm_action_log'});
+  $('gmInvisible').onclick=()=>Net.send({type:'gm_invisible',on:!window.GM.invisible});
+  $('gmAnnouncementSend').onclick=()=>{const el=$('gmAnnouncementText');const text=el.value.trim();if(!text)return consoleMsg('先输入公告内容');if(confirm('确定发布全服公告？')){Net.send({type:'gm_announcement',text});el.value='';}};
   $('gmLoginBtn').onclick = () => {
     if (!window.Net || !Net.connected) return loginMsg('还没连上服务器，等右上角显示「在线」后再试');
     loginMsg('验证中…'); Net.send({ type: 'gm_login', key: $('gmKey').value });
   };
   $('gmKey').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') $('gmLoginBtn').click(); });
-  Net.on('gmOk', () => { isGM = true; window.GM.isGM = true; if (window.__game && __game.me) __game.me.isGM = true; $('gmKey').value = ''; loginMsg(''); if (!$('gmPanel').hidden) showEdit(true); });
+  Net.on('gmOk', () => { isGM = true; window.GM.isGM = true; if (window.__game && __game.me) __game.me.isGM = true; $('gmKey').value = ''; loginMsg(''); $('gmOpen').textContent='✦ GM 控制中心 ✦'; $('gmOpen').classList.add('gmAdminBtn'); if (!$('gmPanel').hidden) { showEdit(true); $('gmConsole').hidden=false; } Net.send({type:'gm_players'}); Net.send({type:'gm_reports'}); });
   Net.on('gmFail', m => loginMsg(m.message || '登录失败'));
   Net.on('gmActionResult', m => { if (window.__game && __game.api) __game.api.toast(m.message || (m.ok ? '操作成功' : '操作失败'), 2200); });
   Net.on('gmActionLog', m => { const t = $('gmAdminLog'); if (t) t.textContent = (m.list || []).map(x => `${x.at} · ${x.by} → ${x.target} · ${x.action}`).join('\n') || '暂无管理记录'; });
+  Net.on('gmPlayers',m=>{renderPlayers(m.list||[]);window.GM.invisible=!!m.invisible;$('gmInvisible').textContent=window.GM.invisible?'👁 关闭隐身':'👁 开启隐身';});
+  Net.on('gmReports',m=>renderReports(m.list||[]));
+  Net.on('gmProfile',m=>{const p=m.profile;const v=$('gmProfileView');v.textContent=p?`名称：${p.name||''}\n性别：${p.gender||'未设置'}\n简介：${p.bio||'未填写'}\nInstagram：${p.ig||'未填写'}\nFacebook：${p.fb||'未填写'}\n隐私设置：${p.visibility||'未知'}\n用户编号：${m.pub}`:'找不到资料';});
+  Net.on('gmInvisible',m=>{window.GM.invisible=!!m.on;$('gmInvisible').textContent=m.on?'👁 关闭隐身':'👁 开启隐身';consoleMsg(m.on?'已开启隐身模式（普通玩家不可见）':'已关闭隐身模式（普通玩家可见）');});
+  Net.on('gmReportActionResult',m=>{consoleMsg(m.message||'举报处理完成');if(m.ok)Net.send({type:'gm_reports'});});
+  Net.on('gmTeleport',m=>{const scene=String(m.room||'').replace(/^sv1:/,'');const st=m.state||{};const doTeleport=()=>{if(!window.__game||!__game.me)return;const G=__game;G.me.x=Number(st.x||0)+1.2;G.me.z=Number(st.z||0)+1.2;G.me.y=G.scene.heightAt(G.me.x,G.me.z);G.me.vx=G.me.vz=0;G.target=null;G.cam.target=[G.me.x,0,G.me.z-(G.scene.camera.lead==null?2:G.scene.camera.lead)];Net.send({type:'state',state:{x:G.me.x,y:G.me.y,z:G.me.z,yaw:G.me.yaw,mv:0,run:0,sing:0,pz:null,sit:null}});consoleMsg('已传送到 '+(m.targetName||'玩家')+' 身边');};if(scene&&scene!==__game.sceneId){__game.api.goTo(scene);setTimeout(doTeleport,600);}else doTeleport();});
   Net.on('gmError', m => { msg('❌ ' + (m.message || '出错了')); if (m.code === 'auth') { isGM = false; window.GM.isGM = false; stopPreview(); showEdit(false); loginMsg(m.message || ''); } });
   Net.on('gmSaved', m => msg((m.persist === 'upstash' ? '✅ 已保存，全服已更新，并永久保存' : '✅ 已保存，全服已更新。⚠ 服务器没有配置永久存储（Upstash），服务器重启后需要重新保存') + '　试听已停止，点「⏮ 从头」可以重新听。'));
   new MutationObserver(() => { if ($('gmPanel').hidden) { stopPreview(); seeking = false; } }).observe($('gmPanel'), { attributes: true, attributeFilter: ['hidden'] });   // 关掉 GM 面板就停止试听，不会一直在后台放

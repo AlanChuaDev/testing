@@ -268,3 +268,21 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .gmAdminBtn{border-color:#a88bd8!important;background:linear-gradient(110deg,#3a2365,#21153e)!important;color:#fff2c0!important}
 .gm-admin-audit{margin-top:12px;padding-top:8px;border-top:1px solid #d9b85a55}
 .gm-admin-audit pre{max-height:130px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#ffe8a0;font:11px/1.45 ui-monospace,monospace;background:#09071888;padding:8px;border-radius:8px}
+
+/* GM 控制中心 */
+#gmPanel{max-height:94dvh;overflow:auto}
+#gmPanel .gmConsoleBar{display:flex;flex-wrap:wrap;gap:7px;padding:10px 14px;border-top:1px solid #d7b45b44}
+#gmPanel .gmConsoleGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0 14px 10px}
+#gmPanel .gmConsoleCard{min-width:0;margin:0 14px 10px;padding:10px;border:1px solid #b99bdf55;border-radius:13px;background:linear-gradient(145deg,#1d1538dd,#0b1025dd)}
+#gmPanel .gmConsoleGrid .gmConsoleCard{margin:0}
+#gmPanel .gmConsoleCard h3{margin:0 0 8px;color:#ffe7a0;font-size:14px}
+#gmPanel .gmList{display:flex;flex-direction:column;gap:7px;max-height:34vh;overflow:auto}
+#gmPanel .gmListItem{padding:8px;border-radius:9px;background:#ffffff0a;border:1px solid #ffffff15;font-size:12px;overflow-wrap:anywhere}
+#gmPanel .gmListItem strong{color:#fff0bd}
+#gmPanel .gmListItem .gmRow{margin-top:6px}
+#gmPanel .gmListItem button{font-size:11px;padding:5px 8px}
+#gmPanel .gmConsoleCard pre{white-space:pre-wrap;overflow:auto;max-height:180px;font:12px/1.5 ui-monospace,monospace;color:#e8dcff;overflow-wrap:anywhere}
+#gmPanel #gmProfileView{max-height:220px}
+@media(max-width:620px){#gmPanel .gmConsoleGrid{grid-template-columns:1fr;padding:0 8px 8px}#gmPanel .gmConsoleCard{margin:0 8px 8px}#gmPanel .gmConsoleBar{padding:8px}}
+
+#gmPanel .gmAnnounceInput{flex:1;min-width:150px;padding:7px 10px;border-radius:10px;border:1px solid #b99bdf77;background:#100d20;color:#fff}
