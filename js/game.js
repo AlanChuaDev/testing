@@ -295,8 +295,8 @@ function openActions() {
   const grid = $('actGrid'); grid.innerHTML = '';
   ACTIONS.forEach(A => {
     const b = document.createElement('button'); b.className = 'actb'; b.innerHTML = `<span class="ai">${A.i}</span>${A.n}`; if (A.col) b.style.setProperty('--ac', A.col);
-    if ((G.me.sit && !A.sit) || G.me.sing || G.me.singing) b.classList.add('off');
-    b.onclick = () => { if (G.me.sing || G.me.singing) return toast('演唱中不能做动作，唱完这首再来 🎤', 1600); if (G.me.sit && !A.sit) return toast('这个动作要先起身再做', 1400); closePanels(); G.me.pose = A.t; G.me.actClip = A.c; setBubble(G.me, A.b); toast(A.n, 1000); };
+    if (G.me.sit && !A.sit) b.classList.add('off');
+    b.onclick = () => { if (G.me.sit && !A.sit) return toast('这个动作要先起身再做', 1400); closePanels(); G.me.pose = A.t; G.me.actClip = A.c; setBubble(G.me, A.b); toast(A.n, 1000); };
     grid.appendChild(b);
   });
   $('actPanel').hidden = false;
@@ -367,8 +367,7 @@ function update(dt) {
     inst.scale = (e.outfit.scale || 1) * 1.4 * PHONE_K();
     if (e.sit) { e.sitP = Math.min(1, e.sitP + dt / .35); const k = e.sitP * e.sitP * (3 - 2 * e.sitP), s = e.sit; e.x = e.sitFrom[0] + (s.x - e.sitFrom[0]) * k; e.z = e.sitFrom[1] + (s.z - e.sitFrom[1]) * k; e.y = s.h - SIT_DROP * k * (e.inst.scale / 1.4); e.yaw = s.yaw; e.moving = false; }
     if (e.cheerT > 0) e.cheerT -= dt;
-    if (e.pose > 0 && e.sing && !e.sit && !e.moving) { e.pose = 0; clip = 'sing'; }   // 演唱中：唱歌动作优先，不被其他动作打断
-    else if (e.pose > 0) { e.pose -= dt; clip = e.actClip || ((G.ktv.arrived && !e.sing && !e.sit && G.sceneId === 'plaza') ? 'cheer' : 'wave'); if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer';
+    if (e.pose > 0) { e.pose -= dt; clip = e.actClip || 'wave'; if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer'; // 动作短暂覆盖唱歌动作，结束后自动回到 sing，不触碰音频链
     inst.hidden.SignOK = clip.replace('sit_', '') !== 'signok'; inst.hidden.SignNo = clip.replace('sit_', '') !== 'signno';   // 举牌动作才显示牌子
     inst.play(clip, .2); inst.speed = e.moving ? (e.run ? 1 : (e.isMe ? 1.1 : 1.0)) : 1;
     if (e.vis !== false || e.isMe) inst.update(dt);
@@ -446,7 +445,7 @@ function render() {
     const top = R.project([e.x, e.y + 1.78 * e.inst.scale, e.z]); if (!top) continue;
     let y = top[1] - 6 * sc2;
     if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2); y += bh + 4 * sc2; }
-    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.name).width + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)'); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; ov.fillText(e.name, top[0], ty + 1);
+    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const label = (e.isGM ? '🛡 ' : '') + e.name; const tw = ov.measureText(label).width + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isMe ? '#ffcf4a' : (e.isGM ? 'rgba(95,55,15,.9)' : 'rgba(20,16,44,.78)')); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; ov.fillText(label, top[0], ty + 1);
       if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }
 }
@@ -480,6 +479,8 @@ function bindInput() {
   const gl = $('gl'); let down = null;
   gl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY, performance.now()]; });
   gl.addEventListener('pointerup', e => {
+    // 任意面板打开时，画布点击只用于面板外空白；绝不触发走路或玩家菜单。
+    if (document.querySelector('.sheet:not([hidden])')) { down = null; return; }
     if (!down || G.transitioning) return; const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]); down = null; if (moved > 10) return;
     const dpr = G.R.canvas.width / G.R.canvas.clientWidth;
     { const px = e.clientX * dpr, py = e.clientY * dpr; let hit = null, hd = 1e9;   // 点到别的玩家 → 弹出菜单（组队 / 举报 / 拉黑），而不是走过去

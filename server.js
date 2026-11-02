@@ -173,11 +173,15 @@ function roomCount(room) {
   const r = rooms.get(room);
   return r ? r.size : 0;
 }
-function cleanName(s) {
-  s = String(s || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 12);
+function reservedName(s) {
+  const n = String(s || "").normalize("NFKC").toLowerCase().replace(/[\s\u200b-\u200f\u202a-\u202e._-]/g, "");
+  return n === "gm" || n.includes("管理员") || n.includes("官方") || n.includes("管理員");
+}
+function cleanName(s, allowReserved = false) {
+  s = String(s || "").normalize("NFKC").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 12);
   if (!s) return "玩家";
   const f = filterText(s);
-  return f.hit ? "玩家" : s;
+  return f.hit || (!allowReserved && reservedName(s)) ? "玩家" : s;
 }
 function cleanOutfit(o) {
   if (!o || typeof o !== "object") return {};
@@ -345,7 +349,8 @@ setInterval(() => { // 清理：掉线太久的队员、过期邀请
 // ---------- 聊天限速 / 禁言 ----------
 function chatGate(ws, raw) { // 返回 { ok, text } 或 { ok:false, msg }
   const now = Date.now();
-  const mu = ws.pub && mutes.get(ws.pub);
+  if (ws.isGM) { const f = filterText(raw); return f.text.replace(/[\s*]/g, "") ? { ok: true, text: f.text, hit: f.hit } : { ok: false, msg: "消息包含不允许的内容" }; }
+  const mu = Math.max(Number(ws.gmMuteUntil) || 0, Number(ws.pub && mutes.get(ws.pub)) || 0);
   if (mu && mu > now) return { ok: false, msg: "你被多人举报，已被临时禁言，还剩 " + Math.ceil((mu - now) / 60000) + " 分钟" };
   if (ws.chatCool && now < ws.chatCool) return { ok: false, msg: "发言太频繁，请稍后再试" };
   ws.chatLog = (ws.chatLog || []).filter((t) => now - t < 10000);
@@ -441,11 +446,28 @@ wss.on("connection", (ws) => {
       if (gmFailTimes.length >= 20 || (ws.gmBlockUntil && now2 < ws.gmBlockUntil)) {
         return send(ws, { type: "gmFail", message: "尝试次数太多，请稍后再试" });
       }
-      if (safeEq(m.key || "", GM_KEY)) { ws.isGM = true; ws.gmFails = 0; return send(ws, { type: "gmOk" }); }
+      if (safeEq(m.key || "", GM_KEY)) {
+        ws.isGM = true; ws.gmFails = 0;
+        if (ws.info) { ws.info.isGM = true; if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: ws.name, isGM: true }, ws); }
+        return send(ws, { type: "gmOk" });
+      }
       gmFailTimes.push(now2);
       ws.gmFails = (ws.gmFails || 0) + 1;
       if (ws.gmFails >= 5) { ws.gmFails = 0; ws.gmBlockUntil = now2 + 60 * 1000; }
       return send(ws, { type: "gmFail", message: "密钥不对" });
+    }
+
+    // GM 管理：仅当前通过口令验证的 WebSocket 连接可执行；目标由服务器按玩家 ID 查找。
+    if (m.type === "gm_moderate") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const target = byPid.get(String(m.pid || ""));
+      if (!target || target === ws) return send(ws, { type: "gmError", message: "目标玩家不存在或不能对自己操作" });
+      const action = String(m.action || "");
+      if (action === "mute") { target.gmMuteUntil = Date.now() + 15 * 60 * 1000; if (target.pub) mutes.set(target.pub, target.gmMuteUntil); send(target, { type: "error", message: "GM 已将你禁言 15 分钟" }); }
+      else if (action === "unmute") { target.gmMuteUntil = 0; if (target.pub) mutes.delete(target.pub); send(target, { type: "toast", message: "GM 已解除你的禁言" }); }
+      else if (action === "kick") { send(target, { type: "error", message: "你已被 GM 请离游戏" }); try { target.close(4001, "GM kick"); } catch (_) {} }
+      else return send(ws, { type: "gmError", message: "未知管理操作" });
+      send(ws, { type: "gmModerated", action, name: target.name }); return;
     }
 
     // GM 保存：只有登录过的连接才能改；改完广播给所有在线玩家，并持久化
@@ -475,7 +497,7 @@ wss.on("connection", (ws) => {
       if (!rooms.has(room)) rooms.set(room, new Map());
       const players = rooms.get(room);
       if (!ws.authed) ws.name = cleanName(m.name);
-      ws.info = { name: ws.name, outfit: cleanOutfit(m.outfit), pub: ws.pub };
+      ws.info = { name: ws.name, outfit: cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM };
       // 告诉新玩家：房间里已有的人
       for (const [pid, p] of players.entries()) {
         send(ws, { type: "playerJoined", playerId: pid, info: p.info, state: p.state });
@@ -522,7 +544,7 @@ wss.on("connection", (ws) => {
       const g = chatGate(ws, text);
       if (!g.ok) return send(ws, { type: "error", message: g.msg });
       ws.recent.push({ ch, text, at: Date.now() }); if (ws.recent.length > 6) ws.recent.shift();
-      const msg = { type: "chat", playerId: ws.playerId, pub: ws.pub, name: ws.name, ch, text: g.text };
+      const msg = { type: "chat", playerId: ws.playerId, pub: ws.pub, name: ws.name, isGM: !!ws.isGM, ch, text: g.text };
       if (ch === "world") {
         for (const c of wss.clients) if (c !== ws && !isBlocked(ws, c)) send(c, msg); // 世界频道：所有在线玩家（拉黑的人看不到）
       } else if (ch === "team") {
@@ -593,9 +615,9 @@ wss.on("connection", (ws) => {
       if (m.type === "profile_get") { const pub = m.pub ? pubArg() : ws.pub; return send(ws, { type: "profile", pub, profile: await S.viewProfile(ws.pub, pub) }); }
       if (m.type === "profile_set") { const p = await S.setProfile(ws.pub, m); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true }); }
       if (m.type === "name_set") {
-        const p = await S.setName(ws.pub, m.name); ws.name = p.name;
-        if (ws.info) ws.info.name = p.name; const pl = ws.room && rooms.get(ws.room)?.get(ws.playerId); if (pl) pl.info.name = p.name;
-        if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: p.name }, ws);
+        const p = await S.setName(ws.pub, m.name, !!ws.isGM); ws.name = p.name;
+        if (ws.info) { ws.info.name = p.name; ws.info.isGM = !!ws.isGM; } const pl = ws.room && rooms.get(ws.room)?.get(ws.playerId); if (pl) { pl.info.name = p.name; pl.info.isGM = !!ws.isGM; }
+        if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: p.name, isGM: !!ws.isGM }, ws);
         const t = teamOfWs(ws); if (t) { const mem = t.members.get(ws.pub); if (mem) mem.name = p.name; teamSend(t); }
         presence(ws); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true, renamed: true });
       }
@@ -642,7 +664,7 @@ wss.on("connection", (ws) => {
       reportLog.push(rec); if (reportLog.length > 300) reportLog.shift();
       persistReport(rec);
       const distinct = new Set(list.map((r) => r.by)).size;
-      if (distinct >= REPORT_MUTE_N) {
+      if (distinct >= REPORT_MUTE_N && !(target && target.isGM)) {
         mutes.set(tpub, nowT + MUTE_MS);
         if (target) send(target, { type: "error", message: "你被多名玩家举报，已被临时禁言 15 分钟" });
         console.log("AUTO-MUTE", tpub, tname, "reports=" + distinct);

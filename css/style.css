@@ -62,7 +62,9 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .sheet{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,92vw);max-height:84vh;display:flex;flex-direction:column;background:var(--panel2);border:1.5px solid var(--line);border-radius:18px;box-shadow:0 20px 60px #000a;backdrop-filter:blur(10px);z-index:20;overflow:hidden}
 .sheet.small{width:min(420px,90vw)}
 .sheet[hidden]{display:none}
-.sheet header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+.sheet header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.sheet>.col,.sheet>.cols,.sheet>.pfBody,.sheet>#teamBody,.sheet>#pmBody{min-height:0;overscroll-behavior:contain}
+.sheet>.col,.sheet>.cols{max-height:calc(84vh - 54px);overflow-y:auto}
 .sheet h2{margin:0;font-size:17px}.sheet h3{margin:6px 0;font-size:13px;opacity:.75}
 .x{width:32px;height:32px;border-radius:50%;background:#ffffff1f;font-size:15px}
 .cols{display:flex;gap:14px;padding:12px 14px;overflow:auto}
@@ -225,9 +227,13 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .fxHp{font-size:12px;opacity:.85}.fxTitle{margin:10px 0 4px}
 .meter{height:8px;border-radius:6px;background:#ffffff22;overflow:hidden}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3ee07f,#ffe04a,#ff5a5a)}
 
-#songPanel{overflow-y:auto}#songPanel .cols{flex:0 0 auto;overflow:visible}
+/* 点歌机：标题栏固定，列表和播放器内容各自滚动 */
+#songPanel{overflow:hidden;min-height:0}
+#songPanel>.cols{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+#songPanel>#karaokePlayer{flex:0 1 auto;min-height:0;max-height:40vh;overflow-y:auto;overscroll-behavior:contain}
 .fxDet{margin:6px 0}.fxDet summary{cursor:pointer;font-weight:700;font-size:13px;padding:6px 0}
-#setPanel{overflow-y:auto}
+#setPanel{overflow:hidden;min-height:0}
+#setPanel>.col{min-height:0;flex:1 1 auto;max-height:68vh;overflow-y:auto;overscroll-behavior:contain}
 /* GM 试听进度条 */
 #gmPanel .gmSeekRow{flex-wrap:nowrap}
 #gmPanel input[type=range]{flex:1;min-width:0;accent-color:#ff7ad1;height:24px;padding:0;background:none;border:0}

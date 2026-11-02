@@ -4,6 +4,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let isGM = false, song = '', offset = 0, timer = 0, taTimer = 0;
+window.GM = { isGM: () => isGM };
 const msg = t => { const m = $('gmMsg'); if (m) m.textContent = t; };
 const loginMsg = t => { const m = $('gmLoginMsg'); if (m) m.textContent = t; };
 const clampOff = v => Math.max(-10000, Math.min(10000, Math.round(v)));
@@ -62,9 +63,10 @@ function bind() {
     loginMsg('验证中…'); Net.send({ type: 'gm_login', key: $('gmKey').value });
   };
   $('gmKey').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') $('gmLoginBtn').click(); });
-  Net.on('gmOk', () => { isGM = true; $('gmKey').value = ''; loginMsg(''); if (!$('gmPanel').hidden) showEdit(true); });
+  Net.on('_close', () => { isGM = false; if (window.__game && window.__game.me) window.__game.me.isGM = false; showEdit(false); });
+  Net.on('gmOk', () => { isGM = true; if (window.__game && window.__game.me) window.__game.me.isGM = true; $('gmKey').value = ''; loginMsg(''); if (!$('gmPanel').hidden) showEdit(true); });
   Net.on('gmFail', m => loginMsg(m.message || '登录失败'));
-  Net.on('gmError', m => { msg('❌ ' + (m.message || '出错了')); if (m.code === 'auth') { isGM = false; stopPreview(); showEdit(false); loginMsg(m.message || ''); } });
+  Net.on('gmError', m => { msg('❌ ' + (m.message || '出错了')); if (m.code === 'auth') { isGM = false; if (window.__game && window.__game.me) window.__game.me.isGM = false; stopPreview(); showEdit(false); loginMsg(m.message || ''); } });
   Net.on('gmSaved', m => msg((m.persist === 'upstash' ? '✅ 已保存，全服已更新，并永久保存' : '✅ 已保存，全服已更新。⚠ 服务器没有配置永久存储（Upstash），服务器重启后需要重新保存') + '　试听已停止，点「⏮ 从头」可以重新听。'));
   new MutationObserver(() => { if ($('gmPanel').hidden) { stopPreview(); seeking = false; } }).observe($('gmPanel'), { attributes: true, attributeFilter: ['hidden'] });   // 关掉 GM 面板就停止试听，不会一直在后台放
 

@@ -75,12 +75,17 @@ function create({ store, filterText }) {
   const conv = (a, b) => [a, b].sort().join("_");
   const E = (message) => { const e = new Error(message); e.user = true; return e; };
 
-  function cleanName(raw) { // 返回合法昵称，不合法就抛错
+  function reservedName(s) {
+    const n = String(s || "").normalize("NFKC").toLowerCase().replace(/[\s\u200b-\u200f\u202a-\u202e._-]/g, "");
+    return n === "gm" || n.includes("管理员") || n.includes("官方") || n.includes("管理員");
+  }
+  function cleanName(raw, allowReserved = false) { // 返回合法昵称，不合法就抛错
     let s = String(raw == null ? "" : raw).normalize("NFKC").replace(/[\u0000-\u001f<>​-‏‪-‮]/g, "").replace(/\s+/g, " ").trim();
     if (!s) throw E("昵称不能为空");
     if ([...s].length > 12) throw E("昵称最多 12 个字");
     if (/[*\/\\]/.test(s)) throw E("昵称里不能有 * / \\ 这些符号");
     if (filterText(s).hit) throw E("昵称包含不允许的内容");
+    if (!allowReserved && reservedName(s)) throw E("普通玩家不能使用 GM / 管理员 / 官方等昵称");
     return s;
   }
   function cleanLink(raw, site) { // 只接受 instagram / facebook 的用户名或链接，统一存成 https 链接
@@ -119,8 +124,8 @@ function create({ store, filterText }) {
     p = { name, nameLower: nameKey(name), gender: "secret", bio: "", ig: "", fb: "", visibility: "friends", nameChangedAt: 0, createdAt: Date.now() };
     await store.set("profiles", pub, p); putProfile(pub, p); return p;
   }
-  async function setName(pub, raw) {
-    const name = cleanName(raw), p = await ensureProfile(pub, name), now = Date.now();
+  async function setName(pub, raw, allowReserved = false) {
+    const name = cleanName(raw, allowReserved), p = await ensureProfile(pub, name), now = Date.now();
     if (p.nameChangedAt && now - p.nameChangedAt < NAME_COOLDOWN) { const h = Math.ceil((NAME_COOLDOWN - (now - p.nameChangedAt)) / 3600000); throw E("昵称每 24 小时只能改一次，还要等约 " + h + " 小时"); }
     if (name === p.name) throw E("和现在的昵称一样");
     const k = nameKey(name);

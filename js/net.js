@@ -115,12 +115,12 @@ function onMsg(m) {
     case 'online': totalOnline = m.n || 0; refreshCount(); break;
     case 'playerJoined': addRemote(m.playerId, m.info || {}, m.state); break;
     case 'playerLeft': dropRemote(m.playerId); break;
-    case 'rename': { const e = remotes.get(m.playerId); if (e) e.name = m.name; break; }
+    case 'rename': { const e = remotes.get(m.playerId); if (e) { e.name = m.name; e.isGM = !!m.isGM; } break; }
     case 'state': { const e = remotes.get(m.playerId); if (e && m.state) applyState(e, m.state, false); break; }
     case 'outfit': { const e = remotes.get(m.playerId); if (e) { e.outfit = Object.assign({}, e.outfit, m.outfit); api.applyOutfit(e.inst, e.outfit); } break; }
     case 'chat': {
       if (social().isBlocked(m.pub)) break;
-      api.addMsg(m.ch, m.name, m.text);
+      api.addMsg(m.ch, (m.isGM ? '🛡 ' : '') + m.name, m.text);
       const e = remotes.get(m.playerId); if (e) api.setBubble(e, m.text);
       break;
     }
@@ -137,7 +137,7 @@ function onMsg(m) {
 function addRemote(id, info, st) {
   if (remotes.has(id) || id === myId) return;
   const e = api.makeEntity(st ? st.x : 0, st ? st.z : 0, info.name || '玩家', Object.assign({ scale: 1 }, info.outfit || {}), false);
-  e.remote = true; e.pid = id; e.pub = info.pub || ''; e.tx = e.x; e.tz = e.z; e.ty = 0; e.mode = 'remote';
+  e.remote = true; e.pid = id; e.pub = info.pub || ''; e.isGM = !!info.isGM; e.tx = e.x; e.tz = e.z; e.ty = 0; e.mode = 'remote';
   remotes.set(id, e); G.remotes.push(e);
   if (st) applyState(e, st, true);
   api.addMsg('world', '', '👋 ' + e.name + ' 来到了这里', false, true);
