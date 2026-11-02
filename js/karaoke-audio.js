@@ -4,8 +4,31 @@
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
-const SONGS = {
+const SONGS = {   // 歌名必须和 js/songs.js 里的 name 一字不差；mp3 / lrc 用 assets/songs 里的拼音文件名
   '小幸运': { name: '小幸运', artist: '田馥甄', mp3: 'assets/songs/xiaoxingyun.mp3', lrc: 'assets/songs/xiaoxingyun.lrc' },
+  '珊瑚海': { name: '珊瑚海', artist: '周杰伦&Lara梁心颐', mp3: 'assets/songs/shanhuhai.mp3', lrc: 'assets/songs/shanhuhai.lrc' },
+  '明明就': { name: '明明就', artist: '周杰伦', mp3: 'assets/songs/mingmingjiu.mp3', lrc: 'assets/songs/mingmingjiu.lrc' },
+  '夏夜最后的烟火': { name: '夏夜最后的烟火', artist: '颜人中', mp3: 'assets/songs/xiayezuihoudeyanhuo.mp3', lrc: 'assets/songs/xiayezuihoudeyanhuo.lrc' },
+  '有点甜': { name: '有点甜', artist: '汪苏泷&BY2', mp3: 'assets/songs/youdiantian.mp3', lrc: 'assets/songs/youdiantian.lrc' },
+  '我知道': { name: '我知道', artist: 'BY2', mp3: 'assets/songs/wozhidao.mp3', lrc: 'assets/songs/wozhidao.lrc' },
+  '恶作剧': { name: '恶作剧', artist: '林依晨', mp3: 'assets/songs/ezuoju.mp3', lrc: 'assets/songs/ezuoju.lrc' },
+  '坠落': { name: '坠落', artist: '蔡健雅', mp3: 'assets/songs/zuiluo.mp3', lrc: 'assets/songs/zuiluo.lrc' },
+  '孤身': { name: '孤身', artist: '徐秉龙', mp3: 'assets/songs/gushen.mp3', lrc: 'assets/songs/gushen.lrc' },
+  '可不可以': { name: '可不可以', artist: '张紫豪', mp3: 'assets/songs/kebukeyi.mp3', lrc: 'assets/songs/kebukeyi.lrc' },
+  '后会无期': { name: '后会无期', artist: '徐良&汪苏泷', mp3: 'assets/songs/houhuiwuqi.mp3', lrc: 'assets/songs/houhuiwuqi.lrc' },
+  '一滴泪的时间 (L)': { name: '一滴泪的时间 (L)', artist: '赵紫骅', mp3: 'assets/songs/yidileideshijian.mp3', lrc: 'assets/songs/yidileideshijian.lrc' },
+  '如愿': { name: '如愿', artist: '王菲', mp3: 'assets/songs/ruyuan.mp3', lrc: 'assets/songs/ruyuan.lrc' },
+  '大眠': { name: '大眠', artist: '王心凌', mp3: 'assets/songs/damian.mp3', lrc: 'assets/songs/damian.lrc' },
+  '乌梅子酱': { name: '乌梅子酱', artist: '李荣浩', mp3: 'assets/songs/wumeizijiang.mp3', lrc: 'assets/songs/wumeizijiang.lrc' },
+  '说好的幸福呢': { name: '说好的幸福呢', artist: '周杰伦', mp3: 'assets/songs/shuohaodexinfune.mp3', lrc: 'assets/songs/shuohaodexinfune.lrc' },
+  '倒数': { name: '倒数', artist: 'G.E.M. 邓紫棋', mp3: 'assets/songs/daoshu.mp3', lrc: 'assets/songs/daoshu.lrc' },
+  '静悄悄': { name: '静悄悄', artist: '陈泫孝', mp3: 'assets/songs/jingqioqio.mp3', lrc: 'assets/songs/jingqioqio.lrc' },
+  '爱我还是他': { name: '爱我还是他', artist: '陶喆', mp3: 'assets/songs/aiwohaishita.mp3', lrc: 'assets/songs/aiwohaishita.lrc' },
+  '此生不换': { name: '此生不换', artist: '青鸟飞鱼', mp3: 'assets/songs/cishengbuhuan.mp3', lrc: 'assets/songs/cishengbuhuan.lrc' },
+  '天天': { name: '天天', artist: '陶喆', mp3: 'assets/songs/tiantian.mp3', lrc: 'assets/songs/tiantian.lrc' },
+  '孤雏': { name: '孤雏', artist: 'AGA', mp3: 'assets/songs/guchu.mp3', lrc: 'assets/songs/guchu.lrc' },
+  '彩虹': { name: '彩虹', artist: '周杰伦', mp3: 'assets/songs/caihong.mp3', lrc: 'assets/songs/caihong.lrc' },
+  '月牙湾': { name: '月牙湾', artist: 'F.I.R.飞儿乐团', mp3: 'assets/songs/yueyawan.mp3', lrc: 'assets/songs/yueyawan.lrc' },
 };
 const lrcCache = {}, rawCache = {};
 const cfgMap = {};   // GM 在服务器保存的配置：{ 歌名: { offset: 毫秒, lrc: 歌词全文(空=用仓库里的文件) } }，由 net.js 收到 songcfg 后写入
