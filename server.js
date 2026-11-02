@@ -150,6 +150,7 @@ const rooms = new Map(); // room -> Map(playerId -> {ws, info, state})
 const byPid = new Map(); // playerId -> ws
 const mutes = new Map(); // pub -> 禁言到期时间
 const reportLog = []; // 最近的举报记录（内存里留 300 条）
+const gmActionLog = []; // GM 管理操作审计（内存留 200 条）
 const reportsOn = new Map(); // targetPub -> [{ by, at }]
 
 const pubOf = (uid) => crypto.createHash("sha256").update("sp:" + uid).digest("hex").slice(0, 16);
@@ -173,15 +174,12 @@ function roomCount(room) {
   const r = rooms.get(room);
   return r ? r.size : 0;
 }
-function reservedName(s) {
-  const n = String(s || "").normalize("NFKC").toLowerCase().replace(/[\s\u200b-\u200f\u202a-\u202e._-]/g, "");
-  return n === "gm" || n.includes("管理员") || n.includes("官方") || n.includes("管理員");
-}
-function cleanName(s, allowReserved = false) {
+function cleanName(s) {
   s = String(s || "").normalize("NFKC").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 12);
   if (!s) return "玩家";
+  if (/^(?:g\s*m|gm|管理员|官方)$/i.test(s.replace(/\s+/g, ""))) return "玩家";
   const f = filterText(s);
-  return f.hit || (!allowReserved && reservedName(s)) ? "玩家" : s;
+  return f.hit ? "玩家" : s;
 }
 function cleanOutfit(o) {
   if (!o || typeof o !== "object") return {};
@@ -349,18 +347,19 @@ setInterval(() => { // 清理：掉线太久的队员、过期邀请
 // ---------- 聊天限速 / 禁言 ----------
 function chatGate(ws, raw) { // 返回 { ok, text } 或 { ok:false, msg }
   const now = Date.now();
-  if (ws.isGM) { const f = filterText(raw); return f.text.replace(/[\s*]/g, "") ? { ok: true, text: f.text, hit: f.hit } : { ok: false, msg: "消息包含不允许的内容" }; }
-  const mu = Math.max(Number(ws.gmMuteUntil) || 0, Number(ws.pub && mutes.get(ws.pub)) || 0);
-  if (mu && mu > now) return { ok: false, msg: "你被多人举报，已被临时禁言，还剩 " + Math.ceil((mu - now) / 60000) + " 分钟" };
-  if (ws.chatCool && now < ws.chatCool) return { ok: false, msg: "发言太频繁，请稍后再试" };
-  ws.chatLog = (ws.chatLog || []).filter((t) => now - t < 10000);
-  if (ws.chatLog.length && now - ws.chatLog[ws.chatLog.length - 1] < 1000) return { ok: false, msg: "发言太快啦，慢一点" };
-  if (ws.chatLog.length >= 6) { ws.chatCool = now + 8000; return { ok: false, msg: "发言太频繁，请 8 秒后再试" }; }
-  const norm = raw.replace(/\s+/g, "").toLowerCase();
-  if (ws.lastChat && ws.lastChat.t === norm && now - ws.lastChat.at < 15000) return { ok: false, msg: "请不要重复发送相同内容" };
-  const f = filterText(raw);
+  if (!ws.isGM) {
+    const mu = ws.pub && mutes.get(ws.pub);
+    if (mu && mu > now) return { ok: false, msg: "你被多人举报，已被临时禁言，还剩 " + Math.ceil((mu - now) / 60000) + " 分钟" };
+    if (ws.chatCool && now < ws.chatCool) return { ok: false, msg: "发言太频繁，请稍后再试" };
+    ws.chatLog = (ws.chatLog || []).filter((t) => now - t < 10000);
+    if (ws.chatLog.length && now - ws.chatLog[ws.chatLog.length - 1] < 1000) return { ok: false, msg: "发言太快啦，慢一点" };
+    if (ws.chatLog.length >= 6) { ws.chatCool = now + 8000; return { ok: false, msg: "发言太频繁，请 8 秒后再试" }; }
+    const norm = raw.replace(/\s+/g, "").toLowerCase();
+    if (ws.lastChat && ws.lastChat.t === norm && now - ws.lastChat.at < 15000) return { ok: false, msg: "请不要重复发送相同内容" };
+    ws.chatLog.push(now); ws.lastChat = { t: norm, at: now };
+  }
+  const f = filterText(raw); // GM 也必须经过内容过滤
   if (!f.text.replace(/[\s*]/g, "")) return { ok: false, msg: "消息包含不允许的内容" };
-  ws.chatLog.push(now); ws.lastChat = { t: norm, at: now };
   return { ok: true, text: f.text, hit: f.hit };
 }
 
@@ -448,7 +447,10 @@ wss.on("connection", (ws) => {
       }
       if (safeEq(m.key || "", GM_KEY)) {
         ws.isGM = true; ws.gmFails = 0;
-        if (ws.info) { ws.info.isGM = true; if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: ws.name, isGM: true }, ws); }
+        if (ws.room) {
+          const meP = rooms.get(ws.room)?.get(ws.playerId); if (meP) meP.info.isGM = true;
+          sendToRoom(ws.room, { type: "gmBadge", playerId: ws.playerId, isGM: true });
+        }
         return send(ws, { type: "gmOk" });
       }
       gmFailTimes.push(now2);
@@ -457,17 +459,38 @@ wss.on("connection", (ws) => {
       return send(ws, { type: "gmFail", message: "密钥不对" });
     }
 
-    // GM 管理：仅当前通过口令验证的 WebSocket 连接可执行；目标由服务器按玩家 ID 查找。
-    if (m.type === "gm_moderate") {
+    // GM 管理玩家：服务端再次校验当前连接的 GM 身份，目标只能是其他在线玩家
+    if (m.type === "gm_action") {
       if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
       const target = byPid.get(String(m.pid || ""));
-      if (!target || target === ws) return send(ws, { type: "gmError", message: "目标玩家不存在或不能对自己操作" });
+      if (!target || target === ws || !target.pub) return send(ws, { type: "gmActionResult", ok: false, message: "目标玩家不在线或不能对自己操作" });
       const action = String(m.action || "");
-      if (action === "mute") { target.gmMuteUntil = Date.now() + 15 * 60 * 1000; if (target.pub) mutes.set(target.pub, target.gmMuteUntil); send(target, { type: "error", message: "GM 已将你禁言 15 分钟" }); }
-      else if (action === "unmute") { target.gmMuteUntil = 0; if (target.pub) mutes.delete(target.pub); send(target, { type: "toast", message: "GM 已解除你的禁言" }); }
-      else if (action === "kick") { send(target, { type: "error", message: "你已被 GM 请离游戏" }); try { target.close(4001, "GM kick"); } catch (_) {} }
-      else return send(ws, { type: "gmError", message: "未知管理操作" });
-      send(ws, { type: "gmModerated", action, name: target.name }); return;
+      const targetRoom = target.room || null;
+      const now = Date.now();
+      if (action === "mute") {
+        const mins = [15, 60, 1440].includes(Number(m.minutes)) ? Number(m.minutes) : 15;
+        mutes.set(target.pub, now + mins * 60000);
+        send(target, { type: "error", message: "GM 已禁言你 " + (mins === 1440 ? "24 小时" : mins + " 分钟") });
+        send(ws, { type: "gmActionResult", ok: true, message: "已禁言 " + target.name + "（" + mins + " 分钟）" });
+      } else if (action === "unmute") {
+        mutes.delete(target.pub);
+        send(target, { type: "toast", message: "GM 已解除你的禁言" });
+        send(ws, { type: "gmActionResult", ok: true, message: "已解除 " + target.name + " 的禁言" });
+      } else if (action === "kick") {
+        const targetName = target.name;
+        send(target, { type: "gmKicked", message: "你已被 GM 請出当前房间" });
+        if (target.room) leaveRoom(target);
+        send(ws, { type: "gmActionResult", ok: true, message: "已请出 " + targetName });
+      } else return send(ws, { type: "gmActionResult", ok: false, message: "未知管理操作" });
+      const rec = { at: new Date(now).toISOString(), by: ws.name, action, target: target.name, room: targetRoom };
+      gmActionLog.push(rec); if (gmActionLog.length > 200) gmActionLog.shift();
+      console.log("GM_ACTION", JSON.stringify(rec));
+      return;
+    }
+
+    if (m.type === "gm_action_log") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      return send(ws, { type: "gmActionLog", list: gmActionLog.slice(-50) });
     }
 
     // GM 保存：只有登录过的连接才能改；改完广播给所有在线玩家，并持久化
@@ -615,9 +638,9 @@ wss.on("connection", (ws) => {
       if (m.type === "profile_get") { const pub = m.pub ? pubArg() : ws.pub; return send(ws, { type: "profile", pub, profile: await S.viewProfile(ws.pub, pub) }); }
       if (m.type === "profile_set") { const p = await S.setProfile(ws.pub, m); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true }); }
       if (m.type === "name_set") {
-        const p = await S.setName(ws.pub, m.name, !!ws.isGM); ws.name = p.name;
-        if (ws.info) { ws.info.name = p.name; ws.info.isGM = !!ws.isGM; } const pl = ws.room && rooms.get(ws.room)?.get(ws.playerId); if (pl) { pl.info.name = p.name; pl.info.isGM = !!ws.isGM; }
-        if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: p.name, isGM: !!ws.isGM }, ws);
+        const p = await S.setName(ws.pub, m.name); ws.name = p.name;
+        if (ws.info) ws.info.name = p.name; const pl = ws.room && rooms.get(ws.room)?.get(ws.playerId); if (pl) pl.info.name = p.name;
+        if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: p.name }, ws);
         const t = teamOfWs(ws); if (t) { const mem = t.members.get(ws.pub); if (mem) mem.name = p.name; teamSend(t); }
         presence(ws); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true, renamed: true });
       }

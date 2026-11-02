@@ -268,8 +268,13 @@ function menuMain() {
     ...friendButtons(e, btn),
     btn('🚩 举报', menuReport, 'warn', !e.pub),
     blocked ? btn('✅ 取消拉黑', () => { unblock(e.pub); menuMain(); }) : btn('🚫 拉黑', () => { block(e.pub, e.name, e.pid); closeMenu(); }, 'warn', !e.pub),
-    ...(window.GM && window.GM.isGM() ? [btn('🔇 GM 禁言 15 分钟', () => { Net.send({ type: 'gm_moderate', action: 'mute', pid: e.pid }); closeMenu(); }, 'warn', !e.pid), btn('🔊 GM 解除禁言', () => { Net.send({ type: 'gm_moderate', action: 'unmute', pid: e.pid }); closeMenu(); }, '', !e.pid), btn('👢 GM 踢出', () => { if (confirm('确定将 ' + e.name + ' 踢出游戏？')) Net.send({ type: 'gm_moderate', action: 'kick', pid: e.pid }); closeMenu(); }, 'warn', !e.pid)] : []),
     h('p', { class: 'hint', text: '查看资料、加好友、私信：之后的版本开放。' }));
+  if (window.GM && window.GM.isGM && e.pid !== Net.myId()) {
+    const admin = h('div', { class: 'gm-player-tools' }, h('div', { class: 'gm-player-title', text: '✦ GM 管理权限 ✦' }));
+    const act = (label, action, minutes) => h('button', { class: 'pmBtn gmAdminBtn', type: 'button', text: label, onclick: () => { Net.send({ type: 'gm_action', pid: e.pid, action, minutes }); } });
+    admin.append(act('禁言 15 分钟', 'mute', 15), act('禁言 1 小时', 'mute', 60), act('禁言 24 小时', 'mute', 1440), act('解除禁言', 'unmute'), act('踢出当前房间', 'kick'));
+    body.append(admin);
+  }
 }
 function friendButtons(e, btn) {                  // 查看资料 / 加好友 / 私信（profile.js 提供）
   const F = window.Friends; if (!F || !e.pub) return [];

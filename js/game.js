@@ -31,13 +31,13 @@ let toastT = 0;
 function toast(msg, ms) { const el = $('toast'); el.textContent = msg; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), ms || 1800); }
 function fmt(n) { return Math.round(n).toLocaleString('en-US'); }
 function setCoins(n) { G.coinCount = n; $('coinN').textContent = fmt(n); store.set('coins', n); }
-function addMsg(ch, name, text, me, sys) {
-  const L = G.chat[ch]; L.push({ name, text, me, sys }); if (L.length > 80) L.shift();
+function addMsg(ch, name, text, me, sys, isGM) {
+  const L = G.chat[ch]; L.push({ name, text, me, sys, isGM: !!isGM }); if (L.length > 80) L.shift();
   if (ch === G.tab) appendLog({ name, text, me, sys });
 }
 function appendLog(m) {
   const log = $('log'), d = document.createElement('div'); d.className = 'm' + (m.me ? ' me' : '') + (m.sys ? ' sys' : '');
-  if (m.sys) d.textContent = m.text; else { const b = document.createElement('b'); b.textContent = m.name; d.append(b, ': ' + m.text); }
+  if (m.sys) d.textContent = m.text; else { if (m.isGM) { const badge = document.createElement('span'); badge.className = 'gm-badge'; badge.textContent = '✦ GM ✦'; d.append(badge, ' '); } const b = document.createElement('b'); b.textContent = m.name; d.append(b, ': ' + m.text); }
   const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 12; log.appendChild(d); while (log.children.length > 80) log.removeChild(log.firstChild); if (stick) log.scrollTop = log.scrollHeight;
 }
 function renderLog() { $('log').innerHTML = ''; G.chat[G.tab].forEach(appendLog); $('log').scrollTop = 1e9; }
@@ -483,7 +483,7 @@ function render() {
     const top = R.project([e.x, e.y + 1.78 * e.inst.scale, e.z]); if (!top) continue;
     let y = top[1] - 6 * sc2;
     if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2); y += bh + 4 * sc2; }
-    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.name).width + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)'); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; ov.fillText(e.name, top[0], ty + 1);
+    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const nw = ov.measureText(e.name).width, bw = e.isGM ? 42 * sc2 : 0, gap = e.isGM ? 5 * sc2 : 0, tw = nw + bw + gap + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isGM ? 'rgba(43,20,82,.96)' : (e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)')); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; const left = top[0] - (bw + gap) / 2; ov.fillText(e.name, left, ty + 1); if (e.isGM) { ov.font = `900 ${Math.max(9, fs * .72)}px system-ui,sans-serif`; ov.fillStyle = '#ffdf75'; ov.fillText('✦ GM ✦', top[0] + (nw + gap) / 2, ty + 1); }
       if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }
 }

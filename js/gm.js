@@ -4,7 +4,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let isGM = false, song = '', offset = 0, timer = 0, taTimer = 0;
-window.GM = { isGM: () => isGM };
+window.GM = { isGM: false };
 const msg = t => { const m = $('gmMsg'); if (m) m.textContent = t; };
 const loginMsg = t => { const m = $('gmLoginMsg'); if (m) m.textContent = t; };
 const clampOff = v => Math.max(-10000, Math.min(10000, Math.round(v)));
@@ -58,15 +58,17 @@ let seeking = false;
 
 function bind() {
   $('gmOpen').onclick = open;
+  const logBtn = $('gmLogRefresh'); if (logBtn) logBtn.onclick = () => Net.send({ type: 'gm_action_log' });
   $('gmLoginBtn').onclick = () => {
     if (!window.Net || !Net.connected) return loginMsg('还没连上服务器，等右上角显示「在线」后再试');
     loginMsg('验证中…'); Net.send({ type: 'gm_login', key: $('gmKey').value });
   };
   $('gmKey').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') $('gmLoginBtn').click(); });
-  Net.on('_close', () => { isGM = false; if (window.__game && window.__game.me) window.__game.me.isGM = false; showEdit(false); });
-  Net.on('gmOk', () => { isGM = true; if (window.__game && window.__game.me) window.__game.me.isGM = true; $('gmKey').value = ''; loginMsg(''); if (!$('gmPanel').hidden) showEdit(true); });
+  Net.on('gmOk', () => { isGM = true; window.GM.isGM = true; if (window.__game && __game.me) __game.me.isGM = true; $('gmKey').value = ''; loginMsg(''); if (!$('gmPanel').hidden) showEdit(true); });
   Net.on('gmFail', m => loginMsg(m.message || '登录失败'));
-  Net.on('gmError', m => { msg('❌ ' + (m.message || '出错了')); if (m.code === 'auth') { isGM = false; if (window.__game && window.__game.me) window.__game.me.isGM = false; stopPreview(); showEdit(false); loginMsg(m.message || ''); } });
+  Net.on('gmActionResult', m => { if (window.__game && __game.api) __game.api.toast(m.message || (m.ok ? '操作成功' : '操作失败'), 2200); });
+  Net.on('gmActionLog', m => { const t = $('gmAdminLog'); if (t) t.textContent = (m.list || []).map(x => `${x.at} · ${x.by} → ${x.target} · ${x.action}`).join('\n') || '暂无管理记录'; });
+  Net.on('gmError', m => { msg('❌ ' + (m.message || '出错了')); if (m.code === 'auth') { isGM = false; window.GM.isGM = false; stopPreview(); showEdit(false); loginMsg(m.message || ''); } });
   Net.on('gmSaved', m => msg((m.persist === 'upstash' ? '✅ 已保存，全服已更新，并永久保存' : '✅ 已保存，全服已更新。⚠ 服务器没有配置永久存储（Upstash），服务器重启后需要重新保存') + '　试听已停止，点「⏮ 从头」可以重新听。'));
   new MutationObserver(() => { if ($('gmPanel').hidden) { stopPreview(); seeking = false; } }).observe($('gmPanel'), { attributes: true, attributeFilter: ['hidden'] });   // 关掉 GM 面板就停止试听，不会一直在后台放
 

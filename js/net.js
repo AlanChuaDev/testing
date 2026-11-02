@@ -115,12 +115,14 @@ function onMsg(m) {
     case 'online': totalOnline = m.n || 0; refreshCount(); break;
     case 'playerJoined': addRemote(m.playerId, m.info || {}, m.state); break;
     case 'playerLeft': dropRemote(m.playerId); break;
-    case 'rename': { const e = remotes.get(m.playerId); if (e) { e.name = m.name; e.isGM = !!m.isGM; } break; }
+    case 'gmBadge': { const e = remotes.get(m.playerId); if (e) e.isGM = !!m.isGM; break; }
+    case 'gmKicked': { toast(m.message || '已被 GM 請出房间', 2500); joinedRoom = null; inRoom = false; wantRoom = null; clearRemotes(); break; }
+    case 'rename': { const e = remotes.get(m.playerId); if (e) e.name = m.name; break; }
     case 'state': { const e = remotes.get(m.playerId); if (e && m.state) applyState(e, m.state, false); break; }
     case 'outfit': { const e = remotes.get(m.playerId); if (e) { e.outfit = Object.assign({}, e.outfit, m.outfit); api.applyOutfit(e.inst, e.outfit); } break; }
     case 'chat': {
       if (social().isBlocked(m.pub)) break;
-      api.addMsg(m.ch, (m.isGM ? '🛡 ' : '') + m.name, m.text);
+      api.addMsg(m.ch, m.name, m.text, false, false, !!m.isGM);
       const e = remotes.get(m.playerId); if (e) api.setBubble(e, m.text);
       break;
     }

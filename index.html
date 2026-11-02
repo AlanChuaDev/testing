@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#120e2b">
 <title>STAR PLAZA · 星光广场</title>
-<script>window.APP_V='20261102-1'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
+<script>window.APP_V='20261103-gm1'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
 </head>
 <body>
 <!-- login / create character -->
@@ -170,6 +170,7 @@
       <textarea id="gmLrc" spellcheck="false" autocomplete="off"></textarea>
       <div class="gmRow"><button id="gmReset" class="chip" type="button">恢复原版</button><button id="gmSave" class="chip on" type="button">💾 保存并全服更新</button></div>
       <p class="hint" id="gmMsg"></p>
+      <div class="gm-admin-audit"><div class="gmRow"><b>✦ GM 管理记录</b><button id="gmLogRefresh" class="chip" type="button">刷新记录</button></div><pre id="gmAdminLog">登录后点击刷新查看最近操作</pre><p class="hint">管理记录由服务器保留最近 200 条（服务器重启后内存记录会清空）。</p></div>
     </div>
   </div>
 </section>
