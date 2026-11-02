@@ -169,7 +169,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .lgNote{font-size:11px;opacity:.6;text-align:center;margin:8px 0 0}
 #online.off{opacity:.5}
 #online.off::after{content:" · 离线";color:#ffb4b4}
-#lyricBar{position:absolute;left:50%;bottom:calc(14px + var(--sa-b,0px));transform:translateX(-50%);max-width:60vw;padding:8px 18px;border-radius:14px;background:rgba(20,14,50,.78);border:1.5px solid var(--line);text-align:center;font-size:17px;font-weight:800;pointer-events:none;z-index:5}
+#lyricBar{position:absolute;left:50%;bottom:calc(14px + var(--sa-b,0px));transform:translateX(-50%);max-width:60vw;padding:8px 18px;border-radius:14px;background:rgba(20,14,50,.78);border:1.5px solid var(--line);text-align:center;font-size:17px;font-weight:800;pointer-events:auto;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;z-index:5}
 #lyricBar small{display:block;font-size:11px;opacity:.75;font-weight:700}
 #lyricBar[hidden]{display:none}
 #rotate{z-index:70}
