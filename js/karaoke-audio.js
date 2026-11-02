@@ -334,6 +334,55 @@ function songNames() { return Object.keys(SONGS); }
 const rawLrc = name => SONGS[name] ? loadRaw(SONGS[name]) : Promise.resolve('');    // 当前生效的歌词全文
 const fileLrc = name => SONGS[name] ? fileRaw(SONGS[name]) : Promise.resolve('');   // 仓库里的原始文件
 setInterval(tickLyrics, 100);              // 歌词条每 0.1 秒刷新（以前靠 timeupdate，约 0.25 秒一次，校准延迟不够准）
+(function enableLyricDrag() {              // 歌词条可拖动：位置会记住，双击恢复默认
+  const b = bar(); if (!b) return;
+  const KEY = 'lyricBarPos';
+  const par = () => b.offsetParent || document.body;
+  function place(cx, cy) {
+    const p = par(), w = b.offsetWidth, h = b.offsetHeight;
+    cx = Math.max(w / 2, Math.min(cx, p.clientWidth - w / 2));
+    cy = Math.max(h / 2, Math.min(cy, p.clientHeight - h / 2));
+    b.style.left = cx + 'px'; b.style.top = cy + 'px';
+    b.style.bottom = 'auto'; b.style.transform = 'translate(-50%,-50%)';
+    return [cx, cy];
+  }
+  function restore() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!s) return;
+      const p = par(); place(s.x * p.clientWidth, s.y * p.clientHeight);
+    } catch (e) {}
+  }
+  let sx = 0, sy = 0, ox = 0, oy = 0, dragging = false;
+  b.addEventListener('pointerdown', e => {
+    e.stopPropagation(); e.preventDefault();
+    const r = b.getBoundingClientRect(), pr = par().getBoundingClientRect();
+    ox = r.left + r.width / 2 - pr.left; oy = r.top + r.height / 2 - pr.top;
+    sx = e.clientX; sy = e.clientY; dragging = true;
+    try { b.setPointerCapture(e.pointerId); } catch (_) {}
+    b.style.cursor = 'grabbing';
+  });
+  b.addEventListener('pointermove', e => {
+    if (!dragging) return; e.stopPropagation();
+    place(ox + e.clientX - sx, oy + e.clientY - sy);
+  });
+  const end = e => {
+    if (!dragging) return; dragging = false; b.style.cursor = 'grab';
+    try {
+      const p = par(), r = b.getBoundingClientRect(), pr = p.getBoundingClientRect();
+      localStorage.setItem(KEY, JSON.stringify({
+        x: (r.left + r.width / 2 - pr.left) / p.clientWidth,
+        y: (r.top + r.height / 2 - pr.top) / p.clientHeight }));
+    } catch (_) {}
+  };
+  b.addEventListener('pointerup', end);
+  b.addEventListener('pointercancel', end);
+  b.addEventListener('dblclick', () => {
+    b.style.left = b.style.top = b.style.bottom = b.style.transform = '';
+    try { localStorage.removeItem(KEY); } catch (_) {}
+  });
+  window.addEventListener('resize', restore);
+  restore();
+})();
 
 window.Karaoke = {
   play, pause, seek, duration, position, playing, songName, hasSong,
