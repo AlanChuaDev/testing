@@ -228,3 +228,8 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 #songPanel{overflow-y:auto}#songPanel .cols{flex:0 0 auto;overflow:visible}
 .fxDet{margin:6px 0}.fxDet summary{cursor:pointer;font-weight:700;font-size:13px;padding:6px 0}
 #setPanel{overflow-y:auto}
+/* GM 试听进度条 */
+#gmPanel .gmSeekRow{flex-wrap:nowrap}
+#gmPanel input[type=range]{flex:1;min-width:0;accent-color:#ff7ad1;height:24px;padding:0;background:none;border:0}
+#gmPanel #gmSeekT{min-width:78px;text-align:right;font-variant-numeric:tabular-nums}
+

@@ -46,9 +46,14 @@ function tick() {                   // 面板打开时每 0.1 秒刷新：当前
   $('gmCur').textContent = L ? L.cur : '（点「试听」开始播放）';
   $('gmNext').textContent = L && L.next ? '下一句：' + L.next : '';
   $('gmTime').textContent = L ? '播放 ' + mmss(L.t) : '';
+  const sk = $('gmSeek'), d = Karaoke.duration(), pos = Karaoke.songName() === song ? Karaoke.position() : 0;   // 进度条跟着播放走（手指拖动时不抢）
+  if (!seeking) { sk.max = d || 300; sk.value = pos; }
+  $('gmSeekT').textContent = fmtT(pos) + ' / ' + fmtT(d);
 }
 function open() { $('setPanel').hidden = true; $('gmPanel').hidden = false; showEdit(isGM); if (!timer) timer = setInterval(tick, 100); }
 function stopPreview() { if (window.Karaoke && Karaoke.playing()) Karaoke.pause(true); }
+const fmtT = t => { t = Math.max(0, Math.floor(t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+let seeking = false;
 
 function bind() {
   $('gmOpen').onclick = open;
@@ -60,13 +65,24 @@ function bind() {
   Net.on('gmOk', () => { isGM = true; $('gmKey').value = ''; loginMsg(''); if (!$('gmPanel').hidden) showEdit(true); });
   Net.on('gmFail', m => loginMsg(m.message || '登录失败'));
   Net.on('gmError', m => { msg('❌ ' + (m.message || '出错了')); if (m.code === 'auth') { isGM = false; stopPreview(); showEdit(false); loginMsg(m.message || ''); } });
-  Net.on('gmSaved', m => msg(m.persist === 'upstash' ? '✅ 已保存，全服已更新，并永久保存' : '✅ 已保存，全服已更新。⚠ 服务器没有配置永久存储（Upstash），服务器重启后需要重新保存'));
+  Net.on('gmSaved', m => msg((m.persist === 'upstash' ? '✅ 已保存，全服已更新，并永久保存' : '✅ 已保存，全服已更新。⚠ 服务器没有配置永久存储（Upstash），服务器重启后需要重新保存') + '　试听已停止，点「⏮ 从头」可以重新听。'));
+  new MutationObserver(() => { if ($('gmPanel').hidden) { stopPreview(); seeking = false; } }).observe($('gmPanel'), { attributes: true, attributeFilter: ['hidden'] });   // 关掉 GM 面板就停止试听，不会一直在后台放
 
   $('gmSong').onchange = () => { stopPreview(); loadSong($('gmSong').value); };
   document.querySelectorAll('#gmPanel [data-off]').forEach(b => b.onclick = () => { offset = clampOff(offset + Number(b.dataset.off)); preview(); });
   $('gmOffReset').onclick = () => { offset = 0; preview(); };
-  $('gmPlay').onclick = () => { if (Karaoke.playing()) return; Karaoke.play(song, Karaoke.songName() === song ? Karaoke.position() : 0, true); };   // quiet：只在本机试听，不打扰房间里的人
+  $('gmPlay').onclick = () => {          // 从暂停的位置继续；已经播完就从头开始。quiet：只在本机试听，不打扰房间里的人
+    if (Karaoke.playing()) return;
+    const same = Karaoke.songName() === song, d = Karaoke.duration(); let pos = same ? Karaoke.position() : 0;
+    if (same && d && pos >= d - 0.5) pos = 0;
+    Karaoke.play(song, pos, true);
+  };
+  $('gmRestart').onclick = () => { stopPreview(); Karaoke.play(song, 0, true); };   // 随时从头重新试听，不用等放完
   $('gmPause').onclick = () => Karaoke.pause(true);
+  const sk = $('gmSeek');
+  sk.addEventListener('pointerdown', () => { seeking = true; });
+  ['pointerup', 'pointercancel', 'change'].forEach(e => sk.addEventListener(e, () => { seeking = false; }));
+  sk.addEventListener('input', () => { const v = Number(sk.value); if (Karaoke.songName() === song) Karaoke.seek(v); else Karaoke.play(song, v, true); });   // 拖进度条跳到任意位置
   $('gmBack').onclick = () => Karaoke.seek(Karaoke.position() - 5);
   $('gmFwd').onclick = () => Karaoke.seek(Karaoke.position() + 5);
   document.querySelectorAll('#gmPanel [data-line]').forEach(b => b.onclick = () => {
@@ -80,7 +96,7 @@ function bind() {
     if (!Net.connected) return msg('❌ 没连上服务器');
     const txt = $('gmLrc').value, file = await Karaoke.fileLrc(song);
     const lrc = txt.trim() === (file || '').trim() ? '' : txt;       // 和仓库文件一样就不存，继续用文件
-    msg('保存中…'); Net.send({ type: 'gm_save', song, cfg: { offset, lrc } });
+    stopPreview(); msg('保存中…'); Net.send({ type: 'gm_save', song, cfg: { offset, lrc } });   // 保存时停止试听
   };
   // 服务器重新下发配置后（比如重连），如果面板开着且你没在编辑，就同步一下显示
   Karaoke.onCfg(() => { if (isGM && !$('gmPanel').hidden && document.activeElement !== $('gmLrc')) { const c = Karaoke.getSongConfig(song); offset = c.offset; $('gmOffVal').textContent = fmtOff(offset); } });

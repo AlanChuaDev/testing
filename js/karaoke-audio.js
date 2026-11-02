@@ -106,7 +106,7 @@ async function play(songName, pos, quiet) {   // quiet=true：只在本机试听
   const url = new URL(song.mp3, document.baseURI).href;
   if (audio.src !== url) audio.src = url;
   audio.volume = Math.max(0, Math.min(1, fx.accVol));
-  if (pos > 0) { try { audio.currentTime = pos; } catch (e) {} }
+  if (typeof pos === 'number' && isFinite(pos)) { try { audio.currentTime = Math.max(0, pos); } catch (e) {} }   // pos=0 也要重置（同一首歌第二次播放必须回到开头）
   try { await audio.play(); } catch (e) { setStatus('请点一下屏幕后再点「播放」'); return false; }
   if (!quiet) listeners.local.forEach(f => f('play', song.name));
   return true;
