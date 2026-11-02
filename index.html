@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#120e2b">
 <title>STAR PLAZA · 星光广场</title>
-<link rel="stylesheet" href="css/style.css">
+<script>window.APP_V='20261102-1'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
 </head>
 <body>
 <!-- login / create character -->
@@ -178,29 +178,11 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-<script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/net-config.js"></script>
-<script src="js/login.js"></script>
-<script src="js/glbchar.js"></script>
-<script src="js/world.js"></script>
-<script src="js/scenes.js"></script>
-<script src="js/scene-common.js"></script>
-<script src="js/plaza.js"></script>
-<script src="js/boutique.js"></script>
-<script src="js/ktv.js"></script>
-<script src="js/ktvrooms.js"></script>
-<script src="js/scene-klcc.js"></script>
-<script src="js/scene-bukit-bintang.js"></script>
-<script src="js/scene_beach.js"></script>
-<script src="js/scene_funfair.js"></script>
-<script src="js/music.js"></script>
-<script src="js/karaoke-audio.js"></script>
-<script src="js/songs.js"></script>
-<script src="js/net.js"></script>
-<script src="js/team.js"></script>
-<script src="js/profile.js"></script>
-<script src="js/gm.js"></script>
-<script src="js/game.js"></script>
+<script>
+(function () {
+  var V = window.APP_V || String(Date.now());
+  ['js/firebase-config.js', 'js/auth.js', 'js/net-config.js', 'js/login.js', 'js/glbchar.js', 'js/world.js', 'js/scenes.js', 'js/scene-common.js', 'js/plaza.js', 'js/boutique.js', 'js/ktv.js', 'js/ktvrooms.js', 'js/scene-klcc.js', 'js/scene-bukit-bintang.js', 'js/scene_beach.js', 'js/scene_funfair.js', 'js/music.js', 'js/karaoke-audio.js', 'js/songs.js', 'js/net.js', 'js/team.js', 'js/profile.js', 'js/gm.js', 'js/game.js'].forEach(function (s) { document.write('<script src="' + s + '?v=' + V + '"><\/script>'); });
+})();
+</script>
 </body>
 </html>

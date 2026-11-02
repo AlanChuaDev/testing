@@ -4,7 +4,11 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const CFG = window.NET_CONFIG || {};
-const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }].concat(CFG.turn ? [CFG.turn] : []) };
+// TURN 中继：net-config.js 里的 turn 可以是一个对象，也可以是数组；forceRelay:true 用来测试 TURN 是否真的可用
+const TURN_LIST = [].concat(CFG.turn || []).filter(Boolean);
+const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }].concat(TURN_LIST), iceCandidatePoolSize: 2, iceTransportPolicy: CFG.forceRelay ? 'relay' : 'all' };
+// 唱歌时最多同时给几位听众发人声（演唱者每多一位听众，就要多上传一路声音）
+const MAX_LISTEN = Math.max(1, Math.min(20, +CFG.maxListeners || 8)), badUntil = new Map(); let fullToastAt = 0;
 
 let G = null, api = null, ws = null, myId = null, myPub = '', started = false, joinedRoom = null, wantRoom = null, inRoom = false;
 let retry = 0, retryT = 0, hello = 0, coldT = 0, lastRx = 0, totalOnline = 0;
@@ -138,7 +142,7 @@ function addRemote(id, info, st) {
   if (st) applyState(e, st, true);
   api.addMsg('world', '', '👋 ' + e.name + ' 来到了这里', false, true);
   refreshCount();
-  if (window.Karaoke && Karaoke.micStream() && !social().isBlocked(e.pub)) startVoiceTo(id);
+  if (window.Karaoke && Karaoke.micStream()) fillVoice();
   if (window.Karaoke && Karaoke.playing()) sendKaraoke('start');
 }
 function dropRemote(id) {
@@ -146,7 +150,7 @@ function dropRemote(id) {
   remotes.delete(id); const i = G.remotes.indexOf(e); if (i >= 0) G.remotes.splice(i, 1);
   closeOut(id); closeIn(id);
   if (Karaoke.remoteFromId() === id) Karaoke.remoteStop(id);
-  refreshCount();
+  refreshCount(); fillVoice();
 }
 function clearRemotes() { remotes.clear(); if (G) G.remotes.length = 0; refreshCount(); }
 function applyState(e, s, snap) {
@@ -210,9 +214,17 @@ async function startVoiceTo(pid) {
   const pc = new RTCPeerConnection(ICE); out.set(pid, pc); pc._q = [];
   stream.getTracks().forEach(t => pc.addTrack(t, stream));
   pc.onicecandidate = e => { if (e.candidate) sig(pid, 'ice', 'singer', e.candidate); };
-  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') closeOut(pid); };
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') { badUntil.set(pid, Date.now() + 15000); closeOut(pid); fillVoice(); } };
   const offer = await pc.createOffer(); await pc.setLocalDescription(tuned(offer));
   sig(pid, 'offer', 'singer', pc.localDescription);
+}
+/* 按距离从近到远，最多给 MAX_LISTEN 位听众发人声；有人离开 / 连接失败时自动补位 */
+function fillVoice() {
+  if (!window.Karaoke || !Karaoke.micStream() || !G || !G.me) return;
+  const d = e => Math.hypot(e.x - G.me.x, e.z - G.me.z), now = Date.now();
+  const cand = [...remotes].filter(([id, e]) => !out.has(id) && !social().isBlocked(e.pub) && !(badUntil.get(id) > now)).sort((a, b) => d(a[1]) - d(b[1]));
+  for (const [id] of cand) { if (out.size >= MAX_LISTEN) break; startVoiceTo(id); }
+  if (cand.length && out.size >= MAX_LISTEN && now - fullToastAt > 20000) { fullToastAt = now; toast('听歌人数已满：离你最近的 ' + MAX_LISTEN + ' 位能听到你的人声（其他人只能听到伴奏）', 4000); }
 }
 function closeOut(pid, notify) {
   const pc = out.get(pid); if (!pc) return;
@@ -283,7 +295,7 @@ addEventListener('pointerdown', () => {
 
 function bindKaraoke() {
   Karaoke.onMic((on) => {
-    if (on) { for (const [id, e] of remotes) if (!social().isBlocked(e.pub)) startVoiceTo(id); }
+    if (on) fillVoice();
     else { for (const id of [...out.keys()]) closeOut(id, true); }
   });
   Karaoke.onLocal((ev) => {
@@ -316,7 +328,7 @@ window.Net = {
     if (started) return; started = true; G = game; api = G.api; G.remotes = G.remotes || [];
     wantRoom = 'sv1:' + G.sceneId;
     bindKaraoke(); connect();
-    setInterval(pushState, 100); setInterval(watchOutfit, 1500); setInterval(singWatch, 250);
+    setInterval(fillVoice, 3000); setInterval(pushState, 100); setInterval(watchOutfit, 1500); setInterval(singWatch, 250);
     requestAnimationFrame(frame);
   },
   onScene(id) {
