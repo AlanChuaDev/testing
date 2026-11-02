@@ -12,7 +12,7 @@ const cfgMap = {};   // GM 在服务器保存的配置：{ 歌名: { offset: 毫
 const offOf = n => ((cfgMap[n] && cfgMap[n].offset) || 0) / 1000;   // 歌词延迟（秒）：显示时间 = 播放时间 − 延迟
 const bar = () => $('lyricBar');
 let micStream = null, current = null, remoteSong = null, remoteFrom = null;
-const listeners = { mic: [], local: [], cfg: [] };
+const listeners = { mic: [], local: [], cfg: [], fx: [] };
 
 function parseLrc(text) {
   const out = [];
@@ -82,6 +82,7 @@ async function play(songName, pos, quiet) {   // quiet=true：只在本机试听
   const t = $('karaokeTitle'); if (t) t.textContent = song.name + ' — ' + song.artist;
   const url = new URL(song.mp3, document.baseURI).href;
   if (audio.src !== url) audio.src = url;
+  audio.volume = Math.max(0, Math.min(1, fx.accVol));
   if (pos > 0) { try { audio.currentTime = pos; } catch (e) {} }
   try { await audio.play(); } catch (e) { setStatus('请点一下屏幕后再点「播放」'); return false; }
   if (!quiet) listeners.local.forEach(f => f('play', song.name));
@@ -103,7 +104,7 @@ async function remoteStart(songName, pos, who, fromId) {
   remoteSong = song; remoteFrom = fromId; remoteWho = who || ''; remoteLines = await loadLrc(song);
   const url = new URL(song.mp3, document.baseURI).href;
   if (remoteAudio.src !== url) remoteAudio.src = url;
-  remoteAudio.volume = 0.85;
+  remoteAudio.volume = Math.max(0, Math.min(1, .85 * fx.accVol));
   const go = () => { try { remoteAudio.currentTime = Math.max(0, pos); } catch (e) {} return remoteAudio.play(); };
   if (remoteAudio.readyState < 1) await new Promise(r => { remoteAudio.addEventListener('loadedmetadata', r, { once: true }); setTimeout(r, 4000); });
   try { await go(); return true; } catch (e) { return false; }
@@ -119,17 +120,91 @@ function remoteStop(fromId) {
 function remotePlaying() { return !!remoteSong; }
 function remoteFromId() { return remoteFrom; }
 
+/* ---------- 音效：混响 / 回声 / 音色 / 混音（所有听众听到的是处理后的声音） ---------- */
+const lsGet2 = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+const PRESETS = {
+  dry:    { name: '原声',   reverb: 0,   echo: 0,   tone: 0,   room: 0.6 },
+  ktv:    { name: 'KTV',    reverb: .38, echo: .18, tone: .35, room: 1.4 },
+  hall:   { name: '大厅',   reverb: .6,  echo: .08, tone: .1,  room: 2.4 },
+  studio: { name: '录音棚', reverb: .16, echo: 0,   tone: .5,  room: 0.7 },
+  air:    { name: '空灵',   reverb: .75, echo: .32, tone: .2,  room: 3.2 },
+};
+const FX_DEF = { preset: 'ktv', reverb: .38, echo: .18, tone: .35, room: 1.4, micVol: 1, accVol: 1, voiceVol: 1, headphone: false };
+const fx = Object.assign({}, FX_DEF, lsGet2('sc_fx', null) || {});
+const liveChains = new Set();
+function saveFx() { try { localStorage.setItem('sc_fx', JSON.stringify(fx)); } catch (e) {} }
+
+function irBuffer(ctx, sec) {             // 用代码生成混响脉冲响应：指数衰减的噪声 + 越往后越暗（高频先消失），不需要任何音频文件
+  const rate = ctx.sampleRate, len = Math.max(64, Math.floor(rate * Math.max(.2, sec))), buf = ctx.createBuffer(2, len, rate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c); let lp = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / len, n = Math.random() * 2 - 1; lp += (n - lp) * (0.92 - 0.75 * t);
+      d[i] = lp * Math.pow(1 - t, 2.4) * (i < rate * .01 ? i / (rate * .01) : 1);
+    }
+  }
+  return buf;
+}
+function buildChain(ctx, stream) {        // 麦克风 → 低切 → 压缩 → 提亮 → [干声 + 混响 + 回声] → 限幅 → 输出
+  const src = ctx.createMediaStreamSource(stream);
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 90;
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -26; comp.knee.value = 18; comp.ratio.value = 3; comp.attack.value = .01; comp.release.value = .22;
+  const pres = ctx.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 3200; pres.Q.value = .8;
+  const air = ctx.createBiquadFilter(); air.type = 'highshelf'; air.frequency.value = 9000;
+  const vol = ctx.createGain(), mix = ctx.createGain(), dry = ctx.createGain(), rev = ctx.createGain(), ech = ctx.createGain(), fb = ctx.createGain();
+  const conv = ctx.createConvolver(), dl = ctx.createDelay(1), dlp = ctx.createBiquadFilter();
+  dl.delayTime.value = .27; fb.gain.value = .34; dlp.type = 'lowpass'; dlp.frequency.value = 3500; dry.gain.value = 1;
+  const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = .002; lim.release.value = .08;
+  const dest = ctx.createMediaStreamDestination(), an = ctx.createAnalyser(); an.fftSize = 512;
+  src.connect(hp); hp.connect(comp); comp.connect(pres); pres.connect(air); air.connect(vol);
+  vol.connect(dry); dry.connect(mix);
+  vol.connect(conv); conv.connect(rev); rev.connect(mix);
+  vol.connect(dl); dl.connect(dlp); dlp.connect(fb); fb.connect(dl); dlp.connect(ech); ech.connect(mix);
+  mix.connect(lim); lim.connect(dest); lim.connect(an);
+  const buf = new Uint8Array(an.fftSize);
+  const chain = {
+    stream: dest.stream, out: lim, ctx,
+    apply() {
+      vol.gain.value = fx.micVol; rev.gain.value = fx.reverb * 1.25; ech.gain.value = fx.echo;
+      pres.gain.value = fx.tone * 5; air.gain.value = fx.tone * 4;
+      if (conv._room !== fx.room) { conv._room = fx.room; conv.buffer = irBuffer(ctx, fx.room); }
+    },
+    level() { an.getByteTimeDomainData(buf); let sum = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; } return Math.min(1, Math.sqrt(sum / buf.length) * 5); },
+    close() { liveChains.delete(chain); try { src.disconnect(); } catch (e) {} try { ctx.close(); } catch (e) {} },
+  };
+  chain.apply(); liveChains.add(chain);
+  return chain;
+}
+function setFx(patch) {
+  if ('preset' in patch && PRESETS[patch.preset]) { const p = PRESETS[patch.preset]; Object.assign(fx, { reverb: p.reverb, echo: p.echo, tone: p.tone, room: p.room }); }
+  else if ('reverb' in patch || 'echo' in patch || 'tone' in patch) fx.preset = 'custom';
+  Object.assign(fx, patch);
+  for (const c of liveChains) c.apply();
+  if (audio) audio.volume = Math.max(0, Math.min(1, fx.accVol));
+  remoteAudio.volume = Math.max(0, Math.min(1, .85 * fx.accVol));
+  if ('headphone' in patch && rawStream) { const t = rawStream.getAudioTracks()[0]; if (t && t.applyConstraints) t.applyConstraints({ echoCancellation: !fx.headphone }).catch(() => {}); }
+  saveFx(); listeners.fx.forEach(f => { try { f(); } catch (e) {} });
+}
+
 /* ---------- 麦克风 ---------- */
+let rawStream = null, chain = null;
 function setStatus(t) { const s = $('karaokeMicStatus'); if (s) s.textContent = t; }
 async function micOn() {
   if (micStream) return micStream;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('此环境不支持麦克风（需要 HTTPS 或 APK）'); throw new Error('no-mic'); }
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }, video: false });
+    // 唱歌和说话不一样：降噪会把长音吃掉，自动增益会让音量忽大忽小，所以都关掉。
+    // 回声消除只在「外放伴奏」时需要（防止伴奏漏进麦克风）；戴耳机时关掉音质更好。
+    rawStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: !fx.headphone, noiseSuppression: false, autoGainControl: false, channelCount: 1 }, video: false });
   } catch (err) {
     setStatus(err.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在系统设置中允许' : '麦克风启动失败：' + err.message);
     throw err;
   }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  try {
+    const ctx = new AC({ latencyHint: 'interactive' }); if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
+    chain = buildChain(ctx, rawStream); micStream = chain.stream;
+  } catch (e) { micStream = rawStream; chain = null; }      // 极端情况下（浏览器不支持 Web Audio）退回原始麦克风
   const b = $('karaokeMic'); if (b) b.textContent = '🔴 关闭麦克风';
   setStatus('麦克风已开启（好友可以听到你）');
   listeners.mic.forEach(f => f(true, micStream));
@@ -137,12 +212,14 @@ async function micOn() {
 }
 function micOff() {
   if (!micStream) return;
-  micStream.getTracks().forEach(t => t.stop()); micStream = null;
+  if (rawStream) rawStream.getTracks().forEach(t => t.stop()); micStream.getTracks().forEach(t => t.stop());
+  if (chain) chain.close(); chain = null; micStream = null; rawStream = null;
   const b = $('karaokeMic'); if (b) b.textContent = '🎙 开启麦克风';
   setStatus('麦克风已关闭');
   listeners.mic.forEach(f => f(false, null));
 }
 function micStreamNow() { return micStream; }
+function micLevel() { return chain ? chain.level() : 0; }
 
 /* ---------- 面板按钮 ---------- */
 $('karaokePlay')?.addEventListener('click', () => play(current ? current.name : '小幸运', audio && audio.currentTime || 0));
@@ -150,24 +227,21 @@ $('karaokePause')?.addEventListener('click', () => pause());
 $('karaokeMic')?.addEventListener('click', () => { if (micStream) micOff(); else micOn().catch(() => {}); });
 if (audio) audio.addEventListener('ended', () => { showBar(''); listeners.local.forEach(f => f('stop')); });
 
-/* ---------- 麦克风测试（设置面板） ---------- */
+/* ---------- 麦克风测试（设置面板）：走和演唱时同一条效果链，戴耳机勾「回放」就能听到混响效果 ---------- */
 let mt = null;
 function mtStatus(t) { const s = $('micTestStatus'); if (s) s.textContent = t; }
 async function micTestStart() {
   if (mt) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { mtStatus('此环境不支持麦克风（需要 HTTPS 或 APK）'); return; }
-  let stream, own = false;
-  try {
-    stream = micStream || (own = true, await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }));
-  } catch (err) { mtStatus(err.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在系统设置里允许' : '麦克风启动失败：' + err.message); return; }
-  const AC = window.AudioContext || window.webkitAudioContext, ctx = new AC();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: !fx.headphone, noiseSuppression: false, autoGainControl: false }, video: false }); }
+  catch (err) { mtStatus(err.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在系统设置里允许' : '麦克风启动失败：' + err.message); return; }
+  const AC = window.AudioContext || window.webkitAudioContext, ctx = new AC({ latencyHint: 'interactive' });
   if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
-  const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 1024; src.connect(an);
-  const loopG = ctx.createGain(); loopG.gain.value = 0; src.connect(loopG); loopG.connect(ctx.destination);
-  const buf = new Uint8Array(an.fftSize); let peak = 0, raf = 0; const t0 = performance.now(); mt = { stream, own, ctx, stop: null };
+  const ch = buildChain(ctx, stream), loopG = ctx.createGain(); loopG.gain.value = 0; ch.out.connect(loopG); loopG.connect(ctx.destination);
+  let peak = 0, raf = 0; const t0 = performance.now(); mt = { stream, chain: ch, stop: null };
   const tick = () => {
-    an.getByteTimeDomainData(buf); let sum = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
-    const rms = Math.sqrt(sum / buf.length), lvl = Math.min(1, rms * 5); peak = Math.max(peak, rms);
+    const lvl = ch.level(); peak = Math.max(peak, lvl / 5);
     const m = $('micMeter'); if (m) m.style.width = (lvl * 100).toFixed(0) + '%';
     loopG.gain.value = $('micLoop') && $('micLoop').checked ? 1 : 0;
     if (peak > 0.02) mtStatus('✅ 麦克风正常，能听到你的声音');
@@ -175,14 +249,46 @@ async function micTestStart() {
     raf = requestAnimationFrame(tick);
   };
   mt.stop = () => {
-    cancelAnimationFrame(raf); try { src.disconnect(); loopG.disconnect(); ctx.close(); } catch (e) {}
-    if (mt.own) stream.getTracks().forEach(t => t.stop());
+    cancelAnimationFrame(raf); stream.getTracks().forEach(t => t.stop()); ch.close();
     mt = null; const b = $('micTestBtn'); if (b) b.textContent = '🎙 开始测试'; const m = $('micMeter'); if (m) m.style.width = '0%';
   };
   const b = $('micTestBtn'); if (b) b.textContent = '⏹ 停止测试'; mtStatus('请对着手机说话…'); tick();
 }
 $('micTestBtn')?.addEventListener('click', () => { if (mt) { mt.stop(); mtStatus('已停止'); } else micTestStart(); });
 setInterval(() => { const p = $('setPanel'); if (mt && p && p.hidden) mt.stop(); }, 500);   // 关掉设置面板自动停止
+
+/* ---------- 音效面板（点歌机里 + 设置里各挂一份，数据互通） ---------- */
+const fxViews = [];
+function mountFx(root) {
+  if (!root) return;
+  root.innerHTML = '';
+  const wrap = document.createElement('div'); wrap.className = 'fxBox'; root.appendChild(wrap);
+  const chips = document.createElement('div'); chips.className = 'fxChips'; wrap.appendChild(chips);
+  const chipBtns = {};
+  Object.entries(PRESETS).forEach(([k, p]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = p.name; b.onclick = () => setFx({ preset: k }); chips.appendChild(b); chipBtns[k] = b; });
+  const sliders = {};
+  const row = (key, label, min, max, step, fmt) => {
+    const r = document.createElement('label'); r.className = 'fxRow'; const t = document.createElement('span'); t.textContent = label;
+    const inp = document.createElement('input'); inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step;
+    const v = document.createElement('em');
+    inp.addEventListener('input', () => setFx({ [key]: parseFloat(inp.value) }));
+    r.append(t, inp, v); wrap.appendChild(r); sliders[key] = [inp, v, fmt];
+  };
+  const pct = v => Math.round(v * 100) + '%';
+  row('reverb', '混响', 0, 1, .01, pct); row('echo', '回声', 0, .8, .01, pct); row('tone', '明亮度', 0, 1, .01, pct);
+  row('micVol', '麦克风音量', 0, 2, .01, pct); row('accVol', '伴奏音量', 0, 1, .01, pct); row('voiceVol', '听别人唱歌的音量', 0, 1, .01, pct);
+  const hp = document.createElement('label'); hp.className = 'fxHp'; const cb = document.createElement('input'); cb.type = 'checkbox';
+  cb.addEventListener('change', () => setFx({ headphone: cb.checked })); hp.append(cb, document.createTextNode(' 我戴着耳机（关闭回声消除，音质更好；外放伴奏时请不要勾）')); wrap.appendChild(hp);
+  const meter = document.createElement('div'); meter.className = 'meter'; const mi = document.createElement('i'); meter.appendChild(mi); wrap.appendChild(meter);
+  const view = { root, sync() {
+    Object.entries(chipBtns).forEach(([k, b]) => b.classList.toggle('on', fx.preset === k));
+    Object.entries(sliders).forEach(([k, [inp, v, f]]) => { if (document.activeElement !== inp) inp.value = fx[k]; v.textContent = f(fx[k]); });
+    cb.checked = !!fx.headphone;
+  }, mi };
+  fxViews.push(view); view.sync();
+}
+listeners.fx.push(() => fxViews.forEach(v => v.sync()));
+setInterval(() => { const lv = micLevel(); fxViews.forEach(v => { if (v.root.isConnected && v.root.offsetParent) v.mi.style.width = (lv * 100).toFixed(0) + '%'; }); }, 100);
 
 /* ---------- GM 配置（歌词延迟 / 改过的歌词） ---------- */
 async function reloadLines() {
@@ -209,7 +315,8 @@ setInterval(tickLyrics, 100);              // 歌词条每 0.1 秒刷新（以�
 window.Karaoke = {
   play, pause, seek, duration, position, playing, songName, hasSong,
   lyricNow, setSongConfig, applyLocal, getSongConfig, songNames, rawLrc, fileLrc, onCfg(f) { listeners.cfg.push(f); },
-  micOn, micOff, micStream: micStreamNow,
+  micOn, micOff, micStream: micStreamNow, micLevel,
+  fx: { get: () => Object.assign({}, fx), set: setFx, presets: PRESETS, onChange(f) { listeners.fx.push(f); } }, mountFx,
   remoteStart, remoteSync, remoteStop, remotePlaying, remoteFromId,
   onMic(f) { listeners.mic.push(f); }, onLocal(f) { listeners.local.push(f); },
 };

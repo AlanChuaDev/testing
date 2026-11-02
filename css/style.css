@@ -192,3 +192,33 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
   #gmPanel #gmCur{font-size:16px;min-height:20px}
   #gmPanel textarea{height:min(190px,48vh)}
 }
+
+
+/* ===== v2：组队 / 玩家菜单 / 音效面板 / 说话指示 ===== */
+#teamHud{position:absolute;right:calc(10px + var(--sa-r));top:calc(78px + var(--sa-t));display:flex;gap:6px;pointer-events:auto}
+.tmBtn{padding:6px 11px;border-radius:12px;background:var(--panel);border:1.5px solid var(--line);font-weight:800;font-size:13px;backdrop-filter:blur(6px)}
+.tmBtn.on{border-color:#49e08a;color:#b8ffd3}.tmBtn.off{opacity:.8;border-color:#ff7a8a;color:#ffc3ca}
+.tmBtn.talk{box-shadow:0 0 0 2px #3ee07f,0 0 12px #3ee07f;animation:talkp .6s infinite alternate}
+@keyframes talkp{to{box-shadow:0 0 0 3px #3ee07f,0 0 18px #3ee07f}}
+#tabs button.dot{position:relative}#tabs button.dot::after{content:"";position:absolute;right:2px;top:1px;width:7px;height:7px;border-radius:50%;background:#ff4d6d}
+.tmList{display:flex;flex-direction:column;gap:6px;padding:10px 14px 4px;max-height:42vh;overflow:auto}
+.tmRow{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:10px;background:#ffffff12;flex-wrap:wrap}
+.tmRow.off{opacity:.55}.tmRow b{font-size:13px}.tmRow small{opacity:.65;flex:1;min-width:70px}
+.tmDot{width:10px;height:10px;border-radius:50%;background:#ffffff33}.tmDot.talk{background:#3ee07f;box-shadow:0 0 8px #3ee07f}
+.tmCtl{display:flex;gap:8px;flex-wrap:wrap;padding:6px 14px}
+#teamBody{padding-bottom:12px}#teamBody>.hint,#teamBody>.tmHint{padding:0 14px}#teamBody>.chip.danger{margin:4px 14px 0;background:#8a2038}
+.tmHint{font-weight:700;margin:12px 0 4px}
+#pmBody{display:flex;flex-direction:column;gap:8px;padding:12px 14px 14px}
+.pmBtn{padding:11px 14px;border-radius:12px;background:#ffffff1a;font-weight:700;text-align:left}.pmBtn.warn{background:#5a2236}.pmBtn:disabled{opacity:.4}
+#invitePop{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:25;padding:12px 18px;border-radius:14px;background:var(--panel2);border:1.5px solid var(--cy);box-shadow:0 10px 30px #000a;text-align:center;font-weight:700}
+#invitePop .row2{display:flex;gap:10px;justify-content:center;margin-top:8px}
+.blkRow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0}
+.fxBox{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.fxChips{display:flex;gap:6px;flex-wrap:wrap}
+.fxRow{display:flex;align-items:center;gap:8px;font-size:12.5px}.fxRow span{width:7.5em;flex:none}.fxRow input{flex:1;min-width:0}.fxRow em{width:3em;text-align:right;font-style:normal;opacity:.7}
+.fxHp{font-size:12px;opacity:.85}.fxTitle{margin:10px 0 4px}
+.meter{height:8px;border-radius:6px;background:#ffffff22;overflow:hidden}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3ee07f,#ffe04a,#ff5a5a)}
+
+#songPanel{overflow-y:auto}#songPanel .cols{flex:0 0 auto;overflow:visible}
+.fxDet{margin:6px 0}.fxDet summary{cursor:pointer;font-weight:700;font-size:13px;padding:6px 0}
+#setPanel{overflow-y:auto}

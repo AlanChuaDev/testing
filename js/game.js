@@ -12,10 +12,10 @@ const QS = new URLSearchParams(location.search);
 const G = {
   style: QS.get('style') || 'cozy',
   R: null, GR: null, model: null, T: null, scenes: {}, scene: null, sceneId: 'plaza',
-  me: null, npcs: [], coins: [], hour: 18.4, timeMode: 'auto', t: 0, joy: { x: 0, z: 0 }, keys: {}, target: null,
+  me: null, remotes: [], coins: [], hour: 18.4, timeMode: 'auto', t: 0, joy: { x: 0, z: 0 }, keys: {}, target: null,
   coinCount: store.get('coins', 1250), chat: { world: [], team: [], family: [] }, tab: 'world',
-  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62 }, quality: store.get('q', 1.5), crowd: store.get('crowd', 22), outline: store.get('ol', 1), npcOn: store.get('npc', 1),
-  wide: store.get('wide', false), transitioning: false, near: null, standHot: { id: 'stand' }, stg: { mode: 'idle', queue: [] }, ktv: { queue: [], cur: null, t: 0, nextAdd: 6 },
+  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62 }, quality: store.get('q', 1.5), outline: store.get('ol', 1),
+  wide: store.get('wide', false), transitioning: false, near: null, standHot: { id: 'stand' }, stg: { mode: 'idle', queue: [] }, ktv: { queue: [], cur: null, arrived: false, online: false, mine: false, doneOk: false },
 };
 const SKIN = [[1, 1, 1], [.96, .88, .8], [.88, .74, .62], [.78, .62, .5]];
 const HAIRS = ['#2a1a14', '#5b3a29', '#8a5a3a', '#d8b26a', '#c94f6a', '#3b3f7a', '#e8e8f0', '#141414', '#7a4fd0'];
@@ -23,11 +23,8 @@ const TOPS = ['#ef6a5b', '#2fb3a3', '#f6b92b', '#6c8cf0', '#c779d9', '#ff9d5c', 
 const BOTS = ['#f4f4f8', '#2d3a5a', '#3d5a4a', '#e8a0b8', '#2b2b3a', '#c9b48a', '#8b5cf6'];
 const SOCKS = ['#6c8cf0', '#f4f4f8', '#2b2b3a', '#ff7ab6', '#5ac26e', '#f6b92b'];
 const SHOES = ['#f4f4f8', '#2b2b3a', '#ef6a5b', '#6c8cf0', '#f6b92b'];
-const NAMES = ['Siti', 'Wei', 'Priya', '阿明', '小芳', 'Hafiz', 'Jun', 'Jasmine', 'Kenji', 'Mei', 'Raj', 'Sherry', 'Danny', 'Lynn', 'Faizal', 'Ah Boy', '小雨', 'Nana', 'Vincent', 'Aina', 'Kelvin', 'Yuki', '阿杰', 'Dewi', 'Chloe', 'Bobo', '小美', 'Zack', 'Amy', 'Tan'];
-const SAY_WORLD = ['有人去 KTV 房间 10 吗？', 'Anyone for KTV Room 10?', '新衣服好好看！', '谁来合唱一首？', "She's good!", 'Hi hi 大家好~', '求组队 ✋', '哈哈哈哈', '今晚有人唱歌吗', 'Mari lepak!', 'Siapa nak join KTV?', '来来来上台！', '刚买的发型怎么样？', '好久没上线了', '有人换装吗～', 'lol', '点歌排队好长啊', '谁在 K 歌厅？', '唱得好听！👏', '一起拍照吗'];
-const SAY_TEAM = ['准备好了吗', '等我 1 分钟', '我在喷泉这边', '走，去 KTV', '再等一下队友'];
-const SAY_FAMILY = ['家族今晚 9 点开唱！', '欢迎新人～', '谁有空来合唱', '本周家族榜加油💪', '大家晚安'];
-const SONGS = [['后来', '刘若英'], ['小幸运', '田馥甄'], ['月亮代表我的心', '邓丽君'], ['江南', '林俊杰'], ['光年之外', 'G.E.M.'], ['告白气球', '周杰伦'], ['夜空中最亮的星', '逃跑计划'], ['爱你', '王心凌'], ['Dancing Queen', 'ABBA'], ['Someone Like You', 'Adele'], ['Shape of You', 'Ed Sheeran'], ['Let It Go', 'Idina Menzel']];
+const SONGS = (window.SongData && SongData.LIST) || [];   // 歌曲表在 js/songs.js（含每首歌的时长）
+const GRACE = 25;                                                  // 轮到你后，走上舞台的时间（秒）
 
 /* ---------------- tiny UI helpers ---------------- */
 let toastT = 0;
@@ -57,10 +54,6 @@ function applyOutfit(inst, o) {
   inst.scale = (o.scale || 1) * 1.4;
 }
 const DEFAULT_OUTFIT = { hair: null, top: null, bottom: null, socks: null, shoes: null, bottomType: 'shorts', choker: true, skin: 0, scale: 1 };
-function randomOutfit() {
-  return { hair: pick(HAIRS), top: pick(TOPS), bottom: pick(BOTS), socks: pick(SOCKS), shoes: pick(SHOES), bottomType: Math.random() < .45 ? 'skirt' : 'shorts', choker: Math.random() < .6, skin: (Math.random() * 4) | 0, scale: rand(.93, 1.06) };
-}
-
 /* ---------------- entities ---------------- */
 function makeEntity(x, z, name, outfit, isMe) {
   const inst = GLBChar.makeInstance(G.model, G.GR); inst.play('idle', .01);
@@ -69,7 +62,14 @@ function makeEntity(x, z, name, outfit, isMe) {
   return e;
 }
 function blocked(sc, x, z, r, e) {
-  if (sc.stageZone && sc.stageZone(x, z, r)) { if (!(e && (e.canStage || sc.stageZone(e.x, e.z, 0)))) return true; }
+  if (sc.stageZone && sc.stageZone(x, z, r)) {
+    /* 舞台只允许「轮到的演唱者」走上去。已经在台上 / 刚走下台阶、还贴在舞台边缘的人，要能继续往外走。
+       （旧版只认「脚下就在舞台里」：走下最后一级台阶后脚下已不在舞台，但人物半径还碰着舞台边缘，往哪走都判堵 → 卡在楼梯口。） */
+    if (!(e && e.canStage)) {
+      const onStage = !!(e && sc.stageZone(e.x, e.z, 0)), atEdge = !!(e && sc.stageZone(e.x, e.z, r + .06));
+      if (!(onStage || atEdge) || (!onStage && sc.stageZone(x, z, 0))) return true;
+    }
+  }
   else if (sc.walkable) { if (!sc.walkable(x, z)) return true; }
   else { const b = sc.bounds; if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return true; }
   const up = e ? e.y > 2.1 : false;
@@ -89,17 +89,6 @@ function fixTarget(sc, x, z) {
   return [x, z];
 }
 function randomSpot(sc) { for (let k = 0; k < 40; k++) { const r = sc.npcRect, x = rand(r.x0, r.x1), z = rand(r.z0, r.z1); if (!blocked(sc, x, z, .6)) return [x, z]; } return [sc.spawn[0], sc.spawn[1]]; }
-
-function populate() {
-  const sc = G.scene; G.npcs = [];
-  const n = !G.npcOn ? 0 : (G.sceneId === 'plaza' || G.sceneId === 'klcc' || G.sceneId === 'bukit') ? G.crowd : (sc.npcN != null ? sc.npcN : (G.sceneId === 'beach' || G.sceneId === 'funfair' ? 4 : 9));
-  const used = new Set();
-  for (let i = 0; i < n; i++) {
-    let [x, z] = randomSpot(sc); let nm; do { nm = pick(NAMES); } while (used.has(nm) && used.size < NAMES.length); used.add(nm);
-    G.npcs.push(makeEntity(x, z, nm, randomOutfit(), false));
-  }
-  $('onlineN').textContent = G.npcs.length + 1; if (window.Net && Net.refresh) Net.refresh();
-}
 
 /* ---------------- scene switching ---------------- */
 /* ======================= integration glue (maps <-> hub, seats, interactions, buttons) ======================= */
@@ -178,11 +167,11 @@ function enterScene(id, spawn) {
   G.scene = getScene(id); G.sceneId = id; G.target = null;
   const s = spawn || G.scene.spawn; G.me.x = s[0]; G.me.z = s[1]; G.me.y = G.scene.heightAt(s[0], s[1]); G.me.vx = G.me.vz = 0;
   G.me.yaw = 0; applyView(); G.cam.ty = G.me.y; G.cam.target = [s[0], 0, s[1] - (G.scene.camera.lead == null ? 2 : G.scene.camera.lead)];
-  G.me.singing = false; G.me.sit = null; G.me.canStage = false; G.ktv = { queue: [], cur: null, t: 0, nextAdd: 5 }; G.stg = { mode: 'idle', queue: [] }; (G.scene.seats || []).forEach(q => { q.who = null; q.res = null; });
+  G.me.singing = false; G.me.sit = null; G.me.canStage = false; G.ktv = { queue: [], cur: null, arrived: false, online: false, mine: false, doneOk: false }; G.stg = { mode: 'idle', queue: [] }; (G.scene.seats || []).forEach(q => { q.who = null; q.res = null; });
   G.near = null; setEnter(null); G.hubLock = true; G.me.actClip = null; if (window.Music) Music.setScene(id);
-  populate(); spawnCoins(); $('banner').hidden = true; $('sceneName').textContent = G.scene.name; closePanels();
+  spawnCoins(); $('banner').hidden = true; $('sceneName').textContent = G.scene.name; closePanels();
   addMsg('world', '', '— 你来到了「' + G.scene.name + '」—', false, true);
-  G.autoCool = 1.3; if (id === 'plaza' || (G.scene.stage && !G.scene.private)) for (let i = 0; i < 2; i++) ktvEnqueueNpc();
+  G.autoCool = 1.3;
   if (window.Net) Net.onScene(id);
 }
 function goTo(id, spawn) {
@@ -190,56 +179,97 @@ function goTo(id, spawn) {
   setTimeout(() => { enterScene(id, spawn); setTimeout(() => { $('fade').classList.remove('on'); G.transitioning = false; }, 120); }, 300);
 }
 
-/* ---------------- KTV queue ---------------- */
-function ktvEnqueueNpc() {
-  const q = G.ktv.queue; if (q.length >= 5) return; const e = pick(G.npcs); if (!e || e.mode === 'sing' || q.some(x => x.e === e)) return; const s = pick(SONGS); q.push({ e, name: e.name, song: s[0], artist: s[1], dur: G.sceneId === 'plaza' ? rand(26, 40) : rand(16, 24) });
+/* ---------------- 舞台队列 ----------------
+   联机时：队列在服务器上（每个房间一个），所有人看到同一份；单机时：本地排队，只有我一个。
+   演唱时长 = 这首歌的时长（js/songs.js）。 */
+const fmtT = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const stageLive = () => !!(window.Net && Net.inRoom);
+const stageClock = () => (G.ktv.online && window.Net) ? Net.now() : Date.now();
+function stageCmd(action) {                       // 'arrived' | 'done' | 'leave'
+  const K = G.ktv;
+  if (K.online) { Net.send({ type: 'stage_' + action }); return; }
+  if (action === 'done' || action === 'leave') { K.cur = null; }
 }
-function fmtT(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
-function endTurn(done) {
-  const K = G.ktv, c = K.cur, st = G.scene.stage; if (!c) return;
-  if (c.you) { G.me.singing = false; G.me.sing = false; G.me.canStage = false; G.me.ejectT = 4; if (G.scene.stageZone && G.scene.stageZone(G.me.x, G.me.z, 0)) G.target = [st.front[0], st.front[1]]; if (done) { setCoins(G.coinCount + 200); toast('演唱完成！+200 金币 🎉', 2400); addMsg('world', '', '你演唱了《' + c.song + '》，获得 200 金币', false, true); } }
-  else { const e = c.e; e.mode = 'wander'; e.sing = false; e.canStage = false; e.wait = 0; e.target = [st.front[0] + rand(-5, 5), st.front[1] + rand(0, 3)]; e.stuck = 0; }
-  K.cur = null; K.arrived = false;
+function startMyTurn() {
+  const st = G.scene.stage; if (G.me.sit) standUp(G.me); G.me.canStage = true; G.ktv.doneOk = false;
+  toast('轮到你了！请在倒数结束前走上舞台 🎤', 2800); G.target = st && st.front ? [st.front[0], st.front[1] - 1.5] : null;
+}
+function stopMyTurn() {                           // 我的这一轮结束了（唱完 / 离开舞台 / 超时 / 掉线）
+  const K = G.ktv, st = G.scene.stage, ok = K.doneOk, song = K.lastSong || ''; K.doneOk = false;
+  G.me.singing = false; G.me.sing = false; G.me.canStage = false; G.me.ejectT = 4;
+  if (G.scene.stageZone && G.scene.stageZone(G.me.x, G.me.z, .5) && st) G.target = [st.front[0], st.front[1]];
+  if (ok) { setCoins(G.coinCount + 200); toast('演唱完成！+200 金币 🎉', 2400); addMsg('world', '', '你演唱了《' + song + '》，获得 200 金币', false, true); }
+}
+function stageReset() { const K = G.ktv; if (K.mine) stopMyTurn(); G.ktv = { queue: [], cur: null, arrived: false, online: false, mine: false, doneOk: false }; }
+function enqueueMe(s) {
+  const K = G.ktv;
+  if (K.queue.some(x => x.you) || (K.cur && K.cur.you)) return toast('你已经点过歌啦，先排队吧');
+  if (stageLive()) { K.online = true; Net.send({ type: 'stage_join', song: s.name, dur: s.dur }); toast('已点歌：' + s.name + '（' + fmtT(s.dur) + '），排队中…'); return; }
+  K.queue.push({ name: '我', you: true, song: s.name, artist: s.artist, dur: s.dur });
+  if (!K.cur) { const q = K.queue.shift(); K.cur = Object.assign({}, q, { phase: 'wait', end: Date.now() + GRACE * 1000 }); }
+  toast('已点歌：' + s.name + '（' + fmtT(s.dur) + '）'); renderQueue();
 }
 function ktvUpdate(dt) {
-  const K = G.ktv, sc = G.scene, st = sc.stage; if (!st) return; const plaza = G.sceneId === 'plaza' || !!sc.private;
-  K.nextAdd -= dt; if (K.nextAdd <= 0 && !sc.private) { ktvEnqueueNpc(); K.nextAdd = rand(plaza ? 9 : 7, plaza ? 18 : 14); }
-  if (!K.cur && K.queue.length) {
-    K.cur = K.queue.shift(); K.t = 0; K.arrived = false; K.grace = K.graceTotal = plaza ? 25 : 40;
-    if (K.cur.you) { if (G.me.sit) standUp(G.me); G.me.canStage = true; toast('轮到你了！请在倒数结束前走上舞台 🎤', 2800); G.target = plaza ? [st.front[0], st.front[1] - 1.5] : null; }
-    else { const e = K.cur.e; if (e.sit) standUp(e); e.mode = 'sing'; e.canStage = true; e.arrivedStage = false; e.target = [st.mic[0] + rand(-.8, .8), st.mic[1] + rand(-.4, .4)]; }
-  }
-  if (K.cur) {
-    const c = K.cur, singer = c.you ? G.me : c.e, d = Math.hypot(singer.x - st.mic[0], singer.z - st.mic[1]);
-    if (!K.arrived) { K.grace -= dt; if (d < (st.arriveR || 2.4)) K.arrived = true; else if (K.grace <= 0) { if (c.you) toast('你没有及时上台，已跳过'); endTurn(false); return; } }
-    else K.t += dt;
-    if (c.you && K.arrived && d > (st.leaveR || 3.4)) { toast('你离开了舞台，演唱结束'); endTurn(false); return; }
-    singer.sing = K.arrived; G.me.singing = !!(c.you && K.arrived);
-    if (K.arrived) { singer.yaw = 0; if (Math.random() < dt * .8) setBubble(singer, pick(['♪', '♫', '♪♪', '🎵'])); }
-    const left = Math.max(0, c.dur - K.t), shown = K.arrived ? left : K.grace, nxt = K.queue.length ? '　下一位：' + K.queue[0].name : '';
-    const bn = $('banner'); bn.hidden = false; bn.innerHTML = (K.arrived ? '🎤 <b>' + c.name + '</b> 《' + c.song + '》' : '🎤 请上台：<b>' + c.name + '</b>') + ' <span class="tm">⏱ ' + fmtT(shown) + '</span>' + nxt;
-    G.stg = { mode: K.arrived ? 'sing' : 'wait', name: c.name, song: c.song, left: shown, total: K.arrived ? c.dur : K.graceTotal, queue: K.queue.map(q => q.name), you: !!c.you };
-    if (K.arrived && K.t >= c.dur) endTurn(true);
+  const K = G.ktv, sc = G.scene, st = sc.stage; if (!st) return;
+  if (K.online && !stageLive()) { stageReset(); toast('和服务器断开了，舞台队列已清空', 2200); return; }
+  const now = stageClock(), c = K.cur, mine = !!(c && c.you);
+  if (mine && !K.mine) startMyTurn();
+  if (!mine && K.mine) stopMyTurn();
+  K.mine = mine; if (c && c.you) K.lastSong = c.song;
+  K.arrived = !!(c && c.phase === 'sing');
+  if (c) {
+    const singer = c.you ? G.me : (window.Net && Net.remote(c.pid)) || null, mic = st.mic;
+    if (mine && K.sentFor !== c) {
+      const d = Math.hypot(G.me.x - mic[0], G.me.z - mic[1]);
+      if (c.phase === 'wait') {
+        if (d < (st.arriveR || 2.4)) { c.phase = 'sing'; c.end = now + c.dur * 1000; K.arrived = true; stageCmd('arrived'); }
+        else if (now > c.end + 800) { toast('你没有及时上台，已跳过'); K.sentFor = c; stageCmd('leave'); }
+      } else if (d > (st.leaveR || 3.4)) { toast('你离开了舞台，演唱结束'); K.sentFor = c; stageCmd('leave'); }
+      else if (now >= c.end) { K.doneOk = true; K.sentFor = c; stageCmd('done'); }
+    }
+    if (mine) { G.me.sing = K.arrived; G.me.singing = K.arrived; if (K.arrived) G.me.yaw = 0; }
+    if (K.arrived && singer && Math.random() < dt * .8) setBubble(singer, pick(['♪', '♫', '♪♪', '🎵']));
+    const left = Math.max(0, (c.end - now) / 1000), nxt = K.queue.length ? '　下一位：' + K.queue[0].name : '';
+    const bn = $('banner'); bn.hidden = false; bn.textContent = '';
+    const nm = document.createElement('b'); nm.textContent = c.name; const tm = document.createElement('span'); tm.className = 'tm'; tm.textContent = '⏱ ' + fmtT(left);
+    bn.append(K.arrived ? '🎤 ' : '🎤 请上台：', nm, K.arrived ? ' 《' + c.song + '》 ' : ' ', tm, nxt);
+    G.stg = { mode: K.arrived ? 'sing' : 'wait', name: c.name, song: c.song, left, total: K.arrived ? c.dur : GRACE, queue: K.queue.map(q => q.name), you: mine };
   } else { $('banner').hidden = true; G.stg = { mode: 'idle', queue: K.queue.map(q => q.name) }; }
   renderQueue();
 }
+if (window.Net) Net.on('stage', m => {           // 服务器下发：这个房间的排队情况（唯一的真相）
+  const K = G.ktv, my = Net.myId(); K.online = true;
+  K.queue = (m.queue || []).map(q => Object.assign({}, q, { you: q.pid === my }));
+  K.cur = m.cur ? Object.assign({}, m.cur, { you: m.cur.pid === my }) : null;
+});
+if (window.Net) Net.on('stage_skip', () => { toast('你没有及时上台，已跳过'); });
+let qKey = '';
 function renderQueue() {
-  const K = G.ktv, el = $('queueList'); if ($('songPanel').hidden) return;
-  const rows = []; if (K.cur) rows.push({ ...K.cur, now: true }); K.queue.forEach(x => rows.push(x));
-  el.innerHTML = rows.length ? rows.map((x, i) => `<div class="q${x.now ? ' now' : ''}${x.you ? ' you' : ''}"><span>${x.now ? '🎤' : i}</span><span><b>${x.name}</b> — ${x.song}</span></div>`).join('') : '<p class="hint">还没有人点歌，来当第一个吧！</p>';
+  const K = G.ktv, el = $('queueList'); if ($('songPanel').hidden) { qKey = ''; return; }
+  const rows = []; if (K.cur) rows.push(Object.assign({}, K.cur, { now: true })); K.queue.forEach(x => rows.push(x));
+  const key = JSON.stringify(rows.map(x => [x.name, x.song, !!x.now, !!x.you])); if (key === qKey) return; qKey = key;
+  el.textContent = '';
+  if (!rows.length) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = '还没有人点歌，来当第一个吧！'; el.appendChild(p); return; }
+  rows.forEach((x, i) => {
+    const d = document.createElement('div'); d.className = 'q' + (x.now ? ' now' : '') + (x.you ? ' you' : '');
+    const a = document.createElement('span'); a.textContent = x.now ? '🎤' : String(i);
+    const b = document.createElement('span'), n = document.createElement('b'); n.textContent = x.name; b.append(n, ' — ' + x.song);
+    d.append(a, b); el.appendChild(d);
+  });
 }
 function openSongs() {
-  const l = $('songList'); if (!l.children.length) SONGS.forEach(([s, a]) => { const b = document.createElement('button'); b.className = 'song'; b.innerHTML = `${s}<small>${a}</small>`; b.onclick = () => {
-    const K = G.ktv; if (K.queue.some(x => x.you) || (K.cur && K.cur.you)) return toast('你已经点过歌啦，先排队吧');
-    K.queue.push({ name: '我', you: true, song: s, artist: a, dur: (G.sceneId === 'plaza' || G.scene.private) ? 60 : 22 }); toast('已点歌：' + s + '（前面还有 ' + (K.queue.length - 1 + (K.cur ? 1 : 0)) + ' 位）'); renderQueue(); }; l.appendChild(b); });
-  $('songHint').textContent = G.scene.private ? '包间点歌：点歌后有 25 秒走上电视前的小舞台，上台后有 60 秒演唱时间，电视和左上角都有倒数。' : G.sceneId === 'plaza' ? '点歌排队。轮到你时有 25 秒走上舞台，上台后有 60 秒演唱时间；台上只有演唱者，其他人只能在台下观看。' : '点歌后排队，轮到你时自动上台演唱（演示版没有真实音频）。';
-  $('songPanel').hidden = false; renderQueue();
+  const l = $('songList'); if (!l.children.length) SONGS.forEach(s => {
+    const b = document.createElement('button'); b.className = 'song'; b.append(s.name); const sm = document.createElement('small'); sm.textContent = s.artist + ' · ' + fmtT(s.dur) + (s.acc ? ' · 🎵有伴奏' : ' · 清唱'); b.appendChild(sm);
+    b.onclick = () => enqueueMe(s); l.appendChild(b);
+  });
+  $('songHint').textContent = (G.scene.private ? '包间点歌：' : '点歌排队（同一张地图的玩家共用一个队列）：') + '轮到你时有 25 秒走上舞台；上台后演唱时间 = 整首歌的时长，电视和左上角都有倒数；台上只有演唱者，其他人在台下观看。目前只有《小幸运》有伴奏，其余歌曲是清唱。';
+  $('songPanel').hidden = false; qKey = ''; renderQueue();
 }
 
 /* ---------------- seats ---------------- */
 const SIT_DROP = .56;
 function PHONE_K() { return innerHeight <= 480 ? 1.3 : 1; }   // 手机横屏人物放大，平板不变
-function sitDown(e, s) { if (!s || s.who) return; if (G.ktv.cur && (G.ktv.cur.you ? e.isMe : G.ktv.cur.e === e)) return; e.sit = s; s.who = e; s.res = null; e.sitP = 0; e.sitFrom = [e.x, e.z]; e.moving = false; e.target = null; e.yaw = s.yaw; if (e.isMe) G.target = null; }
+function sitDown(e, s) { if (!s || s.who) return; if (G.ktv.cur && G.ktv.cur.you && e.isMe) return; e.sit = s; s.who = e; s.res = null; e.sitP = 0; e.sitFrom = [e.x, e.z]; e.moving = false; e.target = null; e.yaw = s.yaw; if (e.isMe) G.target = null; }
 function standUp(e) {
   const s = e.sit; if (!s) return; s.who = null; e.sit = null; e.sitP = 1;
   const sc = G.scene; let [x, z] = s.ap; if (blocked(sc, x, z, .3, e)) { x = s.x + Math.sin(s.yaw) * 1.2; z = s.z + Math.cos(s.yaw) * 1.2; } e.x = x; e.z = z; e.y = sc.heightAt(x, z); e.mode = e.isMe ? 'wander' : 'wander'; if (!e.isMe) { e.wait = rand(1, 4); e.target = null; }
@@ -278,12 +308,6 @@ function setBubble(e, text) { e.bubble = text.length > 26 ? text.slice(0, 25) + 
 function sendChat(text) {
   text = text.trim(); if (!text) return; addMsg(G.tab, '我', text, true); setBubble(G.me, text); if (window.Net) Net.sendChat(G.tab, text);
 }
-function npcChat(dt) {
-  G.chatT = (G.chatT || 0) - dt; if (G.chatT > 0 || !G.npcs.length) return; G.chatT = rand(2.5, 6);
-  const e = pick(G.npcs), r = Math.random(), ch = r < .72 ? 'world' : r < .86 ? 'team' : 'family', text = pick(ch === 'world' ? SAY_WORLD : ch === 'team' ? SAY_TEAM : SAY_FAMILY);
-  addMsg(ch, e.name, text); if (ch === 'world' || Math.random() < .3) setBubble(e, text);
-}
-
 /* ---------------- coins (plaza) ---------------- */
 function spawnCoins() {
   G.coins = []; /* 地上不再掉金币（设定已取消） */
@@ -308,13 +332,11 @@ function update(dt) {
     me.moving = true; me.run = !!run; me.pose = 0; me.actClip = null; const want = Math.atan2(ix, iz); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 12);
   } else me.moving = false;
   if (!me.sit) me.y = sc.heightAt(me.x, me.z);
-  if (me.ejectT > 0) { me.ejectT -= dt; if (me.ejectT <= 0 && sc.stageZone && !me.canStage && sc.stageZone(me.x, me.z, 0)) { me.x = sc.stage.front[0]; me.z = sc.stage.front[1]; me.y = 0; G.target = null; } }
+  if (me.ejectT > 0) { me.ejectT -= dt; if (me.ejectT <= 0 && sc.stageZone && !me.canStage && sc.stageZone(me.x, me.z, .5)) { me.x = sc.stage.front[0]; me.z = sc.stage.front[1]; me.y = 0; G.target = null; } }
   if (sc.update) sc.update(G, dt);
-  // npcs
-  for (const e of G.npcs) npcStep(e, dt, sc);
   // soft separation
-  const all = [me, ...G.npcs, ...(G.remotes || [])];
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const a = all[i], b = all[j], dx = b.x - a.x, dz = b.z - a.z, d2 = dx * dx + dz * dz; if (d2 < .36 && d2 > 1e-5 && !a.sit && !b.sit) { const d = Math.sqrt(d2), p = (.6 - d) * .5; const ux = dx / d * p, uz = dz / d * p; if (a !== me) moveEnt(a, -ux, -uz, sc); else moveEnt(a, -ux * .3, -uz * .3, sc); if (b !== me) moveEnt(b, ux, uz, sc); } }
+  const all = [me, ...(G.remotes || [])];
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const a = all[i], b = all[j], dx = b.x - a.x, dz = b.z - a.z, d2 = dx * dx + dz * dz; if (d2 < .36 && d2 > 1e-5 && !a.sit && !b.sit) { const d = Math.sqrt(d2), p = (.6 - d) * .5; const ux = dx / d * p, uz = dz / d * p; if (a !== me && !a.remote) moveEnt(a, -ux, -uz, sc); else if (a === me) moveEnt(a, -ux * .3, -uz * .3, sc); if (b !== me && !b.remote) moveEnt(b, ux, uz, sc); } }
   // animation + bubbles
   for (const e of all) {
     const inst = e.inst; let clip = 'idle';
@@ -330,8 +352,6 @@ function update(dt) {
   // coins
   for (let i = G.coins.length - 1; i >= 0; i--) { const c = G.coins[i]; if (Math.hypot(c.x - me.x, c.z - me.z) < .9) { G.coins.splice(i, 1); setCoins(G.coinCount + 10); const [x, z] = randomSpot(sc); setTimeout(() => G.coins.push({ x, z, ph: rand(0, 6) }), 4000); } }
   if (G.scene.stage) ktvUpdate(dt);
-  npcChat(dt);
-  if (G.sceneId === 'plaza' && G.ktv.arrived) for (const e of G.npcs) if (!e.moving && !e.sit && !e.sing && e.cheerT <= 0 && e.z < 2 && Math.random() < dt * .25) e.cheerT = rand(1.6, 3);
   // interactions (portals / hotspots)
   let best = null, bd = 1e9; G.autoCool = Math.max(0, (G.autoCool || 0) - dt);
   for (const p of [...sc.portals, ...sc.hotspots]) { const d = Math.hypot(me.x - p.x, me.z - p.z); if (p.hub) { if (d > p.r + .8) G.hubLock = false; else if (d < p.r && !G.hubLock && !G.transitioning && !me.sit && $('hubPanel').hidden) { G.hubLock = true; openHub(); } } if (p.auto) { if (d < p.r && !G.autoCool && !G.transitioning && !me.sit) { G.autoCool = 2; goTo(p.id, p.spawn || null); } continue; } if (d < p.r && d < bd) { bd = d; best = p; } }
@@ -341,26 +361,6 @@ function update(dt) {
   const cc = curCam(sc), tx = clamp(me.x, cc.clampX[0], cc.clampX[1]), tz = clamp(me.z - (cc.lead == null ? 2 : cc.lead), cc.clampZ[0], cc.clampZ[1]), a = 1 - Math.exp(-dt * 5);
   G.cam.ty = (G.cam.ty || 0) + (me.y - (G.cam.ty || 0)) * a; G.cam.target[0] += (tx - G.cam.target[0]) * a; G.cam.target[2] += (tz - G.cam.target[2]) * a;
 }
-function npcStep(e, dt, sc) {
-  const cs = 1.35;
-  if (e.sit) { e.sitT -= dt; if (e.sitT <= 0) standUp(e); return; }
-  if (e.mode === 'sing') {
-    if (e.target) { const dx = e.target[0] - e.x, dz = e.target[1] - e.z, d = Math.hypot(dx, dz); if (d > .3) { moveEnt(e, dx / d * 2.9 * dt, dz / d * 2.9 * dt, sc); e.yaw = Math.atan2(dx, dz); e.moving = true; e.run = false; } else { e.moving = false; e.arrivedStage = true; e.yaw = 0; } }
-    e.y = sc.heightAt(e.x, e.z); return;
-  }
-  e.arrivedStage = false;
-  if (e.wait > 0) { e.wait -= dt; e.moving = false; if (e.wait <= 0) { const near = Math.random() < .4 ? pick(G.npcs) : null; e.target = near && near !== e ? [near.x + rand(-1.4, 1.4), near.z + rand(-1.4, 1.4)] : randomSpot(sc); e.seatGoal = null;
-      if (sc.seats && sc.seats.length && Math.random() < .25) { const q = nearSeat({ x: rand(sc.npcRect.x0, sc.npcRect.x1), z: rand(sc.npcRect.z0, sc.npcRect.z1) }, 99); if (q) { q.res = e; e.seatGoal = q; e.target = [q.ap[0], q.ap[1]]; } }
-      else if (G.sceneId === 'plaza' && G.ktv.arrived && Math.random() < .55) e.target = [rand(-9, 9), rand(-5.2, -1.4)];
-      if (!e.seatGoal && blocked(sc, e.target[0], e.target[1], .4, e)) e.target = randomSpot(sc); e.stuck = 0; } e.y = sc.heightAt(e.x, e.z); return; }
-  if (!e.target) { e.wait = rand(2, 7); return; }
-  const dx = e.target[0] - e.x, dz = e.target[1] - e.z, d = Math.hypot(dx, dz);
-  if (d < .35 || e.stuck > 1.2) { const q = e.seatGoal; e.target = null; e.wait = rand(2, 9); e.moving = false; if (q) { e.seatGoal = null; if (q.res === e) q.res = null; if (d < .6 && !q.who) { sitDown(e, q); e.sitT = rand(14, 38); return; } } if (Math.random() < .5) e.yaw += rand(-1.5, 1.5); return; }
-  const px = e.x, pz = e.z; moveEnt(e, dx / d * cs * dt, dz / d * cs * dt, sc);
-  if (Math.hypot(e.x - px, e.z - pz) < cs * dt * .3) e.stuck += dt; else e.stuck = 0;
-  e.moving = true; e.run = false; let a = Math.atan2(dx, dz) - e.yaw; a = Math.atan2(Math.sin(a), Math.cos(a)); e.yaw += a * Math.min(1, dt * 8); e.y = sc.heightAt(e.x, e.z);
-}
-
 /* ---------------- render ---------------- */
 const dynFx = { spray: new MB(), beam: new MB(), spark: new MB(), pool: new MB(), glow: {} }, dynShadow = new MB(), dynGlow = new MB(), dynCoin = new MB();
 const ovc = $('ov'), ov = ovc.getContext('2d');
@@ -382,7 +382,7 @@ function render() {
   }
   // shadows
   dynShadow.v.length = 0; dynShadow.i.length = 0; dynShadow.n = 0;
-  const all = [G.me, ...G.npcs, ...(G.remotes || [])];
+  const all = [G.me, ...(G.remotes || [])];
   for (const e of all) { const r = .5 * e.inst.scale; dynShadow.floor(e.x - r, e.z - r, e.x + r, e.z + r, e.y + .03, [0, 0, 0]); }
   R.drawDynamic(dynShadow, { tex: G.T.blob, mode: 3, glow: env.indoor ? .5 : .42 - .14 * env.night });
   // characters
@@ -416,11 +416,12 @@ function render() {
   ovc.width = w; ovc.height = h; ov.clearRect(0, 0, w, h); ov.textAlign = 'center'; ov.textBaseline = 'middle';
   const sc2 = dpr, fs = 12 * sc2;
   for (const e of vis) {
-    const near = Math.hypot(e.x - G.me.x, e.z - G.me.z) < 6.5 || e.isMe;
+    const near = Math.hypot(e.x - G.me.x, e.z - G.me.z) < 6.5 || e.isMe || e.speaking;
     const top = R.project([e.x, e.y + 1.78 * e.inst.scale, e.z]); if (!top) continue;
     let y = top[1] - 6 * sc2;
     if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2); y += bh + 4 * sc2; }
-    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.name).width + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)'); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; ov.fillText(e.name, top[0], ty + 1); }
+    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.name).width + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)'); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; ov.fillText(e.name, top[0], ty + 1);
+      if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }
 }
 function pill(g, x, y, w, h, fill) { g.fillStyle = fill; g.beginPath(); const r = h / 2; g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill(); }
@@ -454,7 +455,11 @@ function bindInput() {
   gl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY, performance.now()]; });
   gl.addEventListener('pointerup', e => {
     if (!down || G.transitioning) return; const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]); down = null; if (moved > 10) return;
-    const dpr = G.R.canvas.width / G.R.canvas.clientWidth, g = G.R.pickGround(e.clientX * dpr, e.clientY * dpr, G.me.y || 0), b = G.scene.bounds;
+    const dpr = G.R.canvas.width / G.R.canvas.clientWidth;
+    { const px = e.clientX * dpr, py = e.clientY * dpr; let hit = null, hd = 1e9;   // 点到别的玩家 → 弹出菜单（组队 / 举报 / 拉黑），而不是走过去
+      for (const r of G.remotes || []) { if (!r.vis || r.sx == null) continue; const d = Math.hypot(px - r.sx, py - r.sy), rad = 36 * dpr * Math.max(.85, r.inst.scale / 1.4); if (d < rad && d < hd) { hd = d; hit = r; } }
+      if (hit && window.Social) { Social.openMenu(hit); return; } }
+    const g = G.R.pickGround(e.clientX * dpr, e.clientY * dpr, G.me.y || 0), b = G.scene.bounds;
     G.target = fixTarget(G.scene, clamp(g[0], b.x0, b.x1), clamp(g[2], b.z0, b.z1)); G.me.stuck = 0; G.markT = 0.9;
   });
   // buttons
@@ -466,7 +471,7 @@ function bindInput() {
     else if (a === 'wardrobe') openWardrobe();
     else if (a === 'chat') { $('chatIn').focus(); }
     else if (a === 'chorus') toast(G.scene.private ? '合唱：先在点歌机点歌，邀请好友后可一起上台（开发中）' : '合唱要在 KTV 大堂里使用，进去试试吧 🎤');
-    else if (a === 'friends') toast('好友系统：联网版开发中');
+    else if (a === 'friends') toast('好友 / 私信：之后的版本开放。现在可以点场景里的玩家 → 组队、举报、拉黑');
     else if (a === 'gift') toast('礼物商店：之后接入金币和道具 🎁');
   });
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; G.tab = b.dataset.ch; [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b)); renderLog(); });
@@ -477,13 +482,11 @@ function bindInput() {
   $('serverBtn').onclick = () => toast(window.Net && Net.connected ? '已连接服务器 ✅' : '未连接服务器（离线单机）', 2200);
   $('gear').onclick = () => { $('setPanel').hidden = false; syncSeg(); };
   const seg = (id, key, fn) => $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; fn(parseFloat(b.dataset.v)); syncSeg(); });
-  seg('segCrowd', 'crowd', v => { G.crowd = v; store.set('crowd', v); if (G.sceneId === 'plaza' || G.sceneId === 'klcc' || G.sceneId === 'bukit') populate(); });
-  seg('segNpc', 'npc', v => { G.npcOn = v ? 1 : 0; store.set('npc', G.npcOn); if (!G.npcOn) { if (G.ktv.cur && !G.ktv.cur.you) endTurn(false); G.ktv.queue = G.ktv.queue.filter(x => x.you); } populate(); toast(G.npcOn ? '机器人已开启' : '机器人已关闭（只剩真人玩家）', 1600); });
   seg('segQ', 'q', v => { G.quality = v; store.set('q', v); });
   seg('segOl', 'ol', v => { G.outline = v; store.set('ol', v); });
   addEventListener('contextmenu', e => e.preventDefault());
 }
-function syncSeg() { [['segCrowd', G.crowd], ['segNpc', G.npcOn], ['segQ', G.quality], ['segOl', G.outline]].forEach(([id, v]) => [...$(id).children].forEach(b => b.classList.toggle('on', parseFloat(b.dataset.v) === v))); }
+function syncSeg() { [['segQ', G.quality], ['segOl', G.outline]].forEach(([id, v]) => [...$(id).children].forEach(b => b.classList.toggle('on', parseFloat(b.dataset.v) === v))); }
 function interact() {
   const n = G.near; if (!n || G.transitioning) return;
   if (G.scene.onUse && G.scene.onUse(n, { toast, goTo, setBubble, setCoins, G, pay })) return;
@@ -520,7 +523,6 @@ async function boot() {
     { const st = Scenes.PLAZA_STYLES[G.style] || Scenes.PLAZA_STYLES.cozy; G.hour = QS.get('t') ? parseFloat(QS.get('t')) : st.hour; if (QS.get('t')) G.timeMode = 'x'; }
     G.scene = getScene('plaza'); enterScene('plaza'); spawnCoins();
     if (QS.get('pz')) { G.me.z = parseFloat(QS.get('pz')); G.cam.target[2] = G.me.z - G.scene.camera.lead; }
-    for (let i = 0; i < 6; i++) { const t = pick(SAY_WORLD); addMsg('world', pick(NAMES), t); }
     bindInput(); setCoins(G.coinCount); updateClock(); syncSeg(); renderLog();
     let last = performance.now(), clk = 0, firstPortrait = true;
     let errAt = -1e9;
@@ -540,7 +542,7 @@ async function boot() {
       if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } return [w, h, q];
     };
     requestAnimationFrame(frame);
-    G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, ktvEnqueueNpc, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
+    G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
     if (window.Net) Net.start(G);
   } catch (err) { console.error(err); text.textContent = '加载失败：' + err.message + '（需要支持 WebGL2 的浏览器）'; }
 }

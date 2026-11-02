@@ -1,3 +1,4 @@
+CHANGELOG.md
 README.md
 assets/girl.glb
 assets/music/beach.mp3
@@ -28,6 +29,8 @@ js/scene-klcc.js
 js/scene_beach.js
 js/scene_funfair.js
 js/scenes.js
+js/songs.js
+js/team.js
 js/world.js
 package.json
 server.js

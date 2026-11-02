@@ -1,23 +1,25 @@
-/* net.js — 联机：房间同步、聊天、WebRTC 语音、K歌同步。依赖 window.__game(G)、G.api、window.Karaoke。 */
+/* net.js — 联机核心：连接/自动重连、房间同步、聊天、K歌语音（演唱者→听众）、舞台队列通道。
+   组队 / 举报 / 拉黑在 team.js，它通过 Net.on / Net.send 挂在这里。依赖 window.__game(G)、G.api、window.Karaoke。 */
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
 const CFG = window.NET_CONFIG || {};
 const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }].concat(CFG.turn ? [CFG.turn] : []) };
 
-let G = null, api = null, ws = null, myId = null, started = false, joinedRoom = null, wantRoom = null;
-let retry = 0, retryT = 0, hello = 0, coldT = 0;
+let G = null, api = null, ws = null, myId = null, myPub = '', started = false, joinedRoom = null, wantRoom = null, inRoom = false;
+let retry = 0, retryT = 0, hello = 0, coldT = 0, lastRx = 0, totalOnline = 0;
 let offset = 0, bestRtt = 1e9;
 const remotes = new Map();         // playerId -> entity
 const out = new Map();             // 我是演唱者：listenerId -> RTCPeerConnection
 const inn = new Map();             // 我是听众：singerId -> { pc, audio }
 let autoSing = false, kSyncT = 0, pendingRemoteK = null, kToastKey = '';
-const POSES = ['wave', 'dance', 'cheer', 'clap'];   // 远程玩家只允许这些动作名（服务器只限制了长度）
-const hooks = {};                                     // Net.on(type, fn)：给 gm.js 等模块接收服务器消息
+const hooks = {};                                     // Net.on(type, fn)：team.js / gm.js / game.js 接收服务器消息
 
 const toast = (m, ms) => api && api.toast(m, ms);
 const serverNow = () => Date.now() + offset;
-const sendRaw = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+const sendRaw = o => { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(o)); return true; } return false; };
+const emit = (type, m) => (hooks[type] || []).forEach(f => { try { f(m || {}); } catch (e) { console.error(e); } });
+const social = () => window.Social || { hello: () => ({}), isBlocked: () => false };
 
 function serverUrl() {
   let u = (CFG.server || localStorage.getItem('sc_server') || '').trim();
@@ -27,33 +29,66 @@ function serverUrl() {
   return u.replace(/\/+$/, '');
 }
 function setOnline(on) { const el = $('online'); if (el) el.classList.toggle('off', !on); }
-function refreshCount() { const n = $('onlineN'); if (n && G) n.textContent = G.npcs.length + 1 + remotes.size; }
+function refreshCount() { const n = $('onlineN'); if (n && G) n.textContent = ws && ws.readyState === 1 && totalOnline ? totalOnline : remotes.size + 1; }
 
-/* ================= 连接 ================= */
+/* 麦克风声音走 Opus：默认是"打电话"的低码率，这里调成适合唱歌的高码率 + 关闭 DTX（不然轻声唱会被当成静音切掉） */
+function tuneOpus(sdp) {
+  try {
+    const m = /a=rtpmap:(\d+) opus\/48000\/2/.exec(sdp); if (!m) return sdp;
+    const pt = m[1], want = { minptime: 10, useinbandfec: 1, usedtx: 0, stereo: 0, 'sprop-stereo': 0, maxaveragebitrate: 96000, maxplaybackrate: 48000 };
+    const re = new RegExp('a=fmtp:' + pt + ' ([^\\r\\n]*)');
+    if (re.test(sdp)) return sdp.replace(re, (_, p) => { const o = {}; p.split(';').forEach(kv => { const [k, v] = kv.split('='); if (k) o[k.trim()] = v; }); Object.assign(o, want); return 'a=fmtp:' + pt + ' ' + Object.entries(o).map(([k, v]) => k + '=' + v).join(';'); });
+    return sdp.replace(new RegExp('(a=rtpmap:' + pt + ' opus/48000/2\\r?\\n)'), '$1a=fmtp:' + pt + ' ' + Object.entries(want).map(([k, v]) => k + '=' + v).join(';') + '\r\n');
+  } catch (e) { return sdp; }
+}
+const tuned = d => d && d.sdp ? { type: d.type, sdp: tuneOpus(d.sdp) } : d;
+
+/* ================= 连接 / 自动重连 ================= */
 function connect() {
+  if (ws && ws.readyState <= 1) return;
   const url = serverUrl();
   if (!url) { toast('未设置服务器地址，当前是单机模式', 3000); return; }
   try { ws = new WebSocket(url); } catch (e) { scheduleRetry(); return; }
+  const mine = ws;
   clearTimeout(coldT);
   coldT = setTimeout(() => { if (!ws || ws.readyState !== 1) toast('服务器唤醒中…免费版首次约需 30–60 秒', 5000); }, 4000);
   ws.onopen = () => {
-    retry = 0; clearTimeout(coldT); setOnline(true); toast('已连接服务器 ✅', 1800);
+    if (ws !== mine) return;
+    const wasRetry = retry > 0;
+    retry = 0; clearTimeout(coldT); setOnline(true); lastRx = Date.now(); toast(wasRetry ? '已重新连接 ✅' : '已连接服务器 ✅', 1800);
     ping(); clearInterval(hello); hello = setInterval(ping, 8000);
-    joinedRoom = null; joinRoom();
+    const P = window.Profile || {};
+    sendRaw(Object.assign({ type: 'hello', uid: P.uid || '', name: P.name || '玩家' }, social().hello()));   // 身份 + 黑名单 + 上次的队伍（服务器重启 / 掉线后自动归队）
+    joinedRoom = null; inRoom = false; joinRoom();
+    emit('_open');
   };
-  ws.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
-  ws.onclose = () => { clearInterval(hello); setOnline(false); clearRemotes(); closeAllVoice(); joinedRoom = null; scheduleRetry(); };
+  ws.onmessage = ev => { if (ws !== mine) return; lastRx = Date.now(); let m; try { m = JSON.parse(ev.data); } catch (e) { return; } onMsg(m); };
+  ws.onclose = () => {
+    if (ws !== mine) return;
+    clearInterval(hello); setOnline(false); clearRemotes(); closeAllVoice(); joinedRoom = null; inRoom = false; totalOnline = 0; refreshCount();
+    emit('_close'); scheduleRetry();
+  };
   ws.onerror = () => {};
 }
 function scheduleRetry() {
   clearTimeout(retryT); retry = Math.min(retry + 1, 8);
+  if (retry === 2) toast('连接断开，正在重连…', 2000);
   retryT = setTimeout(connect, Math.min(1000 * retry, 8000));
 }
+function kick() {     // 回到前台 / 网络恢复：不用等退避，马上重连；半死不活的连接直接掐掉重来
+  if (!started) return;
+  if (!ws || ws.readyState > 1) { retry = 0; clearTimeout(retryT); connect(); }
+  else if (ws.readyState === 1 && Date.now() - lastRx > 15000) { try { ws.close(); } catch (e) {} }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
+addEventListener('online', kick);
+setInterval(() => { if (started && ws && ws.readyState === 1 && Date.now() - lastRx > 25000) { try { ws.close(); } catch (e) {} } }, 5000);   // 25 秒没收到任何数据 = 假连接
+
 function ping() { sendRaw({ type: 'ping', t: Date.now() }); }
 function joinRoom() {
   if (!ws || ws.readyState !== 1 || !wantRoom) return;
   if (joinedRoom === wantRoom) return;
-  joinedRoom = wantRoom;
+  joinedRoom = wantRoom; inRoom = false;
   const P = window.Profile || {};
   sendRaw({ type: 'join', room: wantRoom, name: P.name || '玩家', outfit: G.me.outfit });
   lastOutfit = JSON.stringify(G.me.outfit); lastSent = '';
@@ -63,40 +98,44 @@ function joinRoom() {
 function onMsg(m) {
   switch (m.type) {
     case 'connected': myId = m.playerId; break;
+    case 'hello_ok': myPub = m.pub || ''; break;
     case 'pong': {
       const t1 = Date.now(), rtt = t1 - m.t;
       if (rtt < bestRtt * 1.3 + 10) { offset = m.ts - (m.t + rtt / 2); bestRtt = Math.min(bestRtt, rtt); }
       break;
     }
-    case 'joined': break;
-    case 'count': { const n = $('onlineN'); if (n && G) n.textContent = G.npcs.length + (m.n || 1); break; }
+    case 'joined': if (m.room === wantRoom) inRoom = true; break;
+    case 'count': break;
+    case 'online': totalOnline = m.n || 0; refreshCount(); break;
     case 'playerJoined': addRemote(m.playerId, m.info || {}, m.state); break;
     case 'playerLeft': dropRemote(m.playerId); break;
     case 'state': { const e = remotes.get(m.playerId); if (e && m.state) applyState(e, m.state, false); break; }
     case 'outfit': { const e = remotes.get(m.playerId); if (e) { e.outfit = Object.assign({}, e.outfit, m.outfit); api.applyOutfit(e.inst, e.outfit); } break; }
     case 'chat': {
+      if (social().isBlocked(m.pub)) break;
       api.addMsg(m.ch, m.name, m.text);
       const e = remotes.get(m.playerId); if (e) api.setBubble(e, m.text);
       break;
     }
-    case 'rtc': chain = chain.then(() => onRtc(m)).catch(() => {}); break;
+    case 'rtc': if (m.role !== 'team') chain = chain.then(() => onRtc(m)).catch(() => {}); break;   // 队伍语音的信令交给 team.js（下面的 emit）
     case 'karaoke': onKaraoke(m); break;
     case 'songcfg': if (window.Karaoke) Karaoke.setSongConfig(m.cfg || {}); break;   // GM 保存的歌词 / 延迟
-    case 'error': if (m.message) toast(m.message, 2500); break;
-    default: (hooks[m.type] || []).forEach(f => { try { f(m); } catch (e) {} });
+    case 'error': case 'toast': if (m.message) toast(m.message, 2500); break;
+    default: break;
   }
+  emit(m.type, m);
 }
 
 /* ================= 远程玩家 ================= */
 function addRemote(id, info, st) {
   if (remotes.has(id) || id === myId) return;
   const e = api.makeEntity(st ? st.x : 0, st ? st.z : 0, info.name || '玩家', Object.assign({ scale: 1 }, info.outfit || {}), false);
-  e.remote = true; e.pid = id; e.tx = e.x; e.tz = e.z; e.ty = 0; e.mode = 'remote';
+  e.remote = true; e.pid = id; e.pub = info.pub || ''; e.tx = e.x; e.tz = e.z; e.ty = 0; e.mode = 'remote';
   remotes.set(id, e); G.remotes.push(e);
   if (st) applyState(e, st, true);
   api.addMsg('world', '', '👋 ' + e.name + ' 来到了这里', false, true);
   refreshCount();
-  if (window.Karaoke && Karaoke.micStream()) startVoiceTo(id);
+  if (window.Karaoke && Karaoke.micStream() && !social().isBlocked(e.pub)) startVoiceTo(id);
   if (window.Karaoke && Karaoke.playing()) sendKaraoke('start');
 }
 function dropRemote(id) {
@@ -117,6 +156,7 @@ function applyState(e, s, snap) {
   } else if (e.sit) { e.sit = null; e.sitP = 1; }
   if (snap) { e.x = s.x; e.z = s.z; e.y = s.y; }
 }
+const POSES = ['wave', 'dance', 'cheer', 'clap'];   // 远程玩家只允许这些动作名（服务器只限制了长度）
 function frame(now) {
   requestAnimationFrame(frame);
   if (!G || !remotes.size) return;
@@ -152,7 +192,11 @@ function watchOutfit() {
 }
 
 /* ================= 聊天 ================= */
-function sendChat(ch, text) { sendRaw({ type: 'chat', ch, text: String(text).slice(0, 80) }); }
+function sendChat(ch, text) {
+  text = String(text).slice(0, 80);
+  if (ch === 'team' && !(window.Team && Team.inTeam())) { api.addMsg('team', '', '你还没有队伍。点一下场景里的玩家，选「组队邀请」。', false, true); return; }
+  if (!sendRaw({ type: 'chat', ch, text })) toast('没连上服务器，消息没发出去', 1800);
+}
 
 /* ================= 语音（WebRTC，演唱者 → 听众，单向） ================= */
 let chain = Promise.resolve();
@@ -164,7 +208,7 @@ async function startVoiceTo(pid) {
   stream.getTracks().forEach(t => pc.addTrack(t, stream));
   pc.onicecandidate = e => { if (e.candidate) sig(pid, 'ice', 'singer', e.candidate); };
   pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') closeOut(pid); };
-  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+  const offer = await pc.createOffer(); await pc.setLocalDescription(tuned(offer));
   sig(pid, 'offer', 'singer', pc.localDescription);
 }
 function closeOut(pid, notify) {
@@ -179,6 +223,7 @@ function closeIn(pid) {
 }
 function closeAllVoice() { for (const id of [...out.keys()]) closeOut(id); for (const id of [...inn.keys()]) closeIn(id); }
 async function flushQ(pc) { const q = pc._q || []; pc._q = []; for (const c of q) { try { await pc.addIceCandidate(c); } catch (e) {} } }
+const voiceVol = () => { const f = window.Karaoke && Karaoke.fx ? Karaoke.fx.get() : null; return f ? f.voiceVol : 1; };
 
 async function onRtc(m) {
   const from = m.from;
@@ -188,14 +233,14 @@ async function onRtc(m) {
     const entry = { pc, audio: null }; inn.set(from, entry);
     pc.onicecandidate = e => { if (e.candidate) sig(from, 'ice', 'listener', e.candidate); };
     pc.ontrack = ev => {
-      const a = new Audio(); a.autoplay = true; a.playsInline = true; a.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+      const a = new Audio(); a.autoplay = true; a.playsInline = true; a.srcObject = ev.streams[0] || new MediaStream([ev.track]); a.volume = voiceVol();
       entry.audio = a;
       const tryPlay = () => a.play().catch(() => { toast('点一下屏幕就能听到歌声 🎧', 3000); addEventListener('pointerdown', () => a.play().catch(() => {}), { once: true }); });
       tryPlay();
       const e = remotes.get(from); if (e) toast('🎤 ' + e.name + ' 开麦了', 2000);
     };
     await pc.setRemoteDescription(m.data); await flushQ(pc);
-    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
+    const ans = await pc.createAnswer(); await pc.setLocalDescription(tuned(ans));
     sig(from, 'answer', 'listener', pc.localDescription);
   } else if (m.kind === 'answer' && m.role === 'listener') {
     const pc = out.get(from); if (!pc) return;
@@ -233,7 +278,7 @@ addEventListener('pointerdown', () => {
 
 function bindKaraoke() {
   Karaoke.onMic((on) => {
-    if (on) { for (const id of remotes.keys()) startVoiceTo(id); }
+    if (on) { for (const [id, e] of remotes) if (!social().isBlocked(e.pub)) startVoiceTo(id); }
     else { for (const id of [...out.keys()]) closeOut(id, true); }
   });
   Karaoke.onLocal((ev) => {
@@ -241,6 +286,7 @@ function bindKaraoke() {
     if (ev === 'play') { sendKaraoke('start'); kSyncT = setInterval(() => sendKaraoke('sync'), 4000); }
     else sendKaraoke('stop');
   });
+  Karaoke.fx.onChange(() => { const v = voiceVol(); inn.forEach(o => { if (o.audio) o.audio.volume = v; }); });
 }
 
 /* 轮到我上台演唱：自动开麦克风 + 放伴奏；演唱结束自动关闭 */
@@ -252,7 +298,7 @@ function singWatch() {
     autoSing = true; const song = (G.stg && G.stg.song) || '';
     Karaoke.micOn().catch(() => toast('麦克风没开成功，好友听不到你', 2500));
     if (Karaoke.hasSong(song)) Karaoke.play(song, 0);
-    else toast('《' + song + '》暂无伴奏文件，目前只有《小幸运》有伴奏', 3000);
+    else toast('《' + song + '》暂无伴奏文件，这一首是清唱 🎤（目前只有《小幸运》有伴奏）', 3600);
   } else if (!now && wasSinging && autoSing) {
     autoSing = false; Karaoke.pause(); Karaoke.micOff();
   }
@@ -271,12 +317,18 @@ window.Net = {
   onScene(id) {
     if (!started) return;
     clearRemotes(); closeAllVoice(); Karaoke.remoteStop();
-    wantRoom = 'sv1:' + id; joinRoom();
-    if (Karaoke.micStream()) { /* 我开着麦克风切换了地图：新房间的人加入时会自动建立连接 */ }
+    wantRoom = 'sv1:' + id; inRoom = false; joinRoom();
+    emit('_scene', { id });
   },
   sendChat, refresh: refreshCount,
   send: sendRaw,
   on(type, fn) { (hooks[type] = hooks[type] || []).push(fn); },
+  now: serverNow, dropVoice(pid) { closeIn(pid); closeOut(pid, true); },
+  myId: () => myId, myPub: () => myPub, ICE, tuneOpus, tuned,
+  remote: pid => remotes.get(pid) || null,
+  remotes: () => [...remotes.values()],
   get connected() { return !!(ws && ws.readyState === 1); },
+  get inRoom() { return !!(ws && ws.readyState === 1 && inRoom); },
+  get room() { return wantRoom; },
 };
 })();

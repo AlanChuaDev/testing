@@ -78,7 +78,7 @@
   <header><h2>🎤 点歌机</h2><button class="x" data-close>✕</button></header>
   <div class="cols">
     <div class="col"><h3>歌单</h3><div id="songList"></div></div>
-    <div class="col"><h3>排队</h3><div id="queueList"></div><p class="hint" id="songHint">点歌后排队，轮到你时自动上台演唱；上台后会自动开麦克风并播放伴奏（目前只有《小幸运》有伴奏）。</p></div>
+    <div class="col"><h3>排队</h3><div id="queueList"></div><p class="hint" id="songHint">点歌后排队，轮到你时自动上台演唱；演唱时间就是整首歌的时长。上台后会自动开麦克风并播放伴奏（目前只有《小幸运》有伴奏）。</p></div>
   </div>
   <div id="karaokePlayer" class="karaoke-player">
     <div class="karaoke-now">🎵 正在播放：<b id="karaokeTitle">尚未点歌</b></div>
@@ -90,6 +90,7 @@
       <span id="karaokeMicStatus">麦克风未开启</span>
     </div>
     <audio id="karaokeAudio" preload="metadata"></audio>
+    <details class="fxDet"><summary>🎛 音效 / 混音（混响 · 回声 · 音量）</summary><div id="fxSong"></div></details>
     <p class="hint">麦克风权限由手机系统弹窗确认。开麦后，同一张地图里的好友能听到你唱歌（建议戴耳机，避免回声）。</p>
   </div>
 </section>
@@ -116,8 +117,6 @@
 <section class="sheet small" id="setPanel" hidden>
   <header><h2>⚙ 设置</h2><button class="x" data-close>✕</button></header>
   <div class="col">
-    <h3>机器人（NPC）</h3><div class="seg" id="segNpc"><button data-v="1">开</button><button data-v="0">关</button></div>
-    <h3>人群数量（广场）</h3><div class="seg" id="segCrowd"><button data-v="8">少</button><button data-v="22">中</button><button data-v="40">多</button></div>
     <h3>画质</h3><div class="seg" id="segQ"><button data-v="1">流畅</button><button data-v="1.5">标准</button><button data-v="2">高清</button></div>
     <h3>角色描边</h3><div class="seg" id="segOl"><button data-v="1">开</button><button data-v="0">关</button></div>
     <h3>背景音乐</h3><div class="seg" id="segMusic"><button data-v="1">开</button><button data-v="0">关</button></div>
@@ -129,6 +128,12 @@
       <div class="meter"><i id="micMeter"></i></div>
       <p class="hint" id="micTestStatus">点「开始测试」，然后对着手机说话，绿条会跳动。</p>
     </div>
+    <h3>K 歌音效（混响 / 回声 / 混音）</h3>
+    <div id="fxSet"></div>
+    <h3>黑名单</h3>
+    <div id="blockList"></div>
+    <h3>更新说明</h3>
+    <div id="whatsNew" class="hint"></div>
     <h3>GM</h3>
     <button id="gmOpen" type="button" class="chip">🛠 GM 工具</button>
   </div>
@@ -180,7 +185,9 @@
 <script src="js/scene_funfair.js"></script>
 <script src="js/music.js"></script>
 <script src="js/karaoke-audio.js"></script>
+<script src="js/songs.js"></script>
 <script src="js/net.js"></script>
+<script src="js/team.js"></script>
 <script src="js/gm.js"></script>
 <script src="js/game.js"></script>
 </body>
