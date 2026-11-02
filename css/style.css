@@ -62,18 +62,26 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .sheet{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,92vw);max-height:84vh;display:flex;flex-direction:column;background:var(--panel2);border:1.5px solid var(--line);border-radius:18px;box-shadow:0 20px 60px #000a;backdrop-filter:blur(10px);z-index:20;overflow:hidden}
 .sheet.small{width:min(420px,90vw)}
 .sheet[hidden]{display:none}
-.sheet header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
-.sheet>.col,.sheet>.cols,.sheet>.pfBody,.sheet>#teamBody,.sheet>#pmBody{min-height:0;overscroll-behavior:contain}
-.sheet>.col,.sheet>.cols{max-height:calc(84vh - 54px);overflow-y:auto}
+.sheet header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
 .sheet h2{margin:0;font-size:17px}.sheet h3{margin:6px 0;font-size:13px;opacity:.75}
 .x{width:32px;height:32px;border-radius:50%;background:#ffffff1f;font-size:15px}
 .cols{display:flex;gap:14px;padding:12px 14px;overflow:auto}
 .col{flex:1;min-width:0}
 .cols.wide .col{flex:1}
+.song-tools{display:flex;gap:5px;align-items:center;margin:0 0 8px;flex-wrap:wrap}
+#songSearch{flex:1 1 150px;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:#ffffff12;color:var(--ink);font:inherit;font-size:12px;outline:0;-webkit-user-select:text;user-select:text;touch-action:manipulation}
+#songSearch:focus{border-color:var(--cy)}
+.song-tools button{padding:7px 10px;border-radius:9px;background:#ffffff16;font-size:12px;font-weight:800;white-space:nowrap}
+.song-tools button.on{background:linear-gradient(120deg,#8a2bd6,#e0408f);color:#fff}
 #songList{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.song{padding:8px 10px;border-radius:10px;background:#ffffff14;text-align:left;font-weight:700;font-size:13px;line-height:1.25}
+.song{position:relative;display:flex;align-items:flex-start;gap:6px;padding:8px 8px 8px 10px;border-radius:10px;background:#ffffff14;text-align:left;font-weight:700;font-size:13px;line-height:1.25;min-width:0}
+.song-pick{flex:1;min-width:0;padding:0;background:transparent;text-align:left;font-weight:700;font-size:13px;line-height:1.25;overflow-wrap:anywhere}
+.song .song-main{display:block;min-width:0;overflow-wrap:anywhere}
 .song small{display:block;opacity:.6;font-weight:500}
+.song .song-fav{flex:0 0 26px;width:26px;height:26px;margin:-3px -3px 0 0;padding:0;border-radius:8px;background:#ffffff12;color:#bdb3d9;font-size:17px;line-height:1}
+.song .song-fav.on{color:#ffd65c;background:#ffd65c20}
 .song:active{background:#ffffff30}
+#songEmpty{margin:8px 0}
 #actGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px;overflow:auto}
 .actb{display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 4px;border-radius:12px;background:#ffffff14;font-weight:800;font-size:13px;border:1.5px solid transparent}
 .actb .ai{font-size:26px;line-height:1.1}
@@ -96,6 +104,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 #fade.on{opacity:1;pointer-events:auto}
 #rotate{position:fixed;inset:0;z-index:40;background:#120e2bee;display:none;align-items:center;justify-content:center;text-align:center;font-size:22px;font-weight:800;line-height:1.8}
 @media (orientation:portrait){#rotate{display:flex}}
+@media (max-width:620px){#songPanel .cols{gap:10px;padding:9px}#songPanel #songList{grid-template-columns:1fr}#songPanel .col{min-width:0}}
 #loading{position:fixed;inset:0;z-index:50;background:#120e2b;display:flex;align-items:center;justify-content:center;text-align:center;transition:opacity .4s}
 #loading.done{opacity:0;pointer-events:none}
 .spin{width:42px;height:42px;margin:0 auto 12px;border:4px solid #ffffff33;border-top-color:var(--cy);border-radius:50%;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
@@ -227,13 +236,9 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .fxHp{font-size:12px;opacity:.85}.fxTitle{margin:10px 0 4px}
 .meter{height:8px;border-radius:6px;background:#ffffff22;overflow:hidden}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3ee07f,#ffe04a,#ff5a5a)}
 
-/* 点歌机：标题栏固定，列表和播放器内容各自滚动 */
-#songPanel{overflow:hidden;min-height:0}
-#songPanel>.cols{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
-#songPanel>#karaokePlayer{flex:0 1 auto;min-height:0;max-height:40vh;overflow-y:auto;overscroll-behavior:contain}
+#songPanel{overflow:hidden}#songPanel .cols{flex:1 1 auto;min-height:0;overflow:auto}#songPanel .song-col{min-height:0}#songPanel #songList{max-height:none}
 .fxDet{margin:6px 0}.fxDet summary{cursor:pointer;font-weight:700;font-size:13px;padding:6px 0}
-#setPanel{overflow:hidden;min-height:0}
-#setPanel>.col{min-height:0;flex:1 1 auto;max-height:68vh;overflow-y:auto;overscroll-behavior:contain}
+#setPanel{overflow-y:auto}
 /* GM 试听进度条 */
 #gmPanel .gmSeekRow{flex-wrap:nowrap}
 #gmPanel input[type=range]{flex:1;min-width:0;accent-color:#ff7ad1;height:24px;padding:0;background:none;border:0}

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#120e2b">
 <title>STAR PLAZA · 星光广场</title>
-<script>window.APP_V='20261103-2'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
+<script>window.APP_V='20261102-1'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
 </head>
 <body>
 <!-- login / create character -->
@@ -77,7 +77,9 @@
 <section class="sheet" id="songPanel" hidden>
   <header><h2>🎤 点歌机</h2><button class="x" data-close>✕</button></header>
   <div class="cols">
-    <div class="col"><h3>歌单</h3><div id="songList"></div></div>
+    <div class="col song-col"><h3>歌单</h3>
+      <div class="song-tools"><input id="songSearch" type="search" placeholder="搜索歌曲名或歌手…" autocomplete="off"><button id="songAll" class="on" type="button">全部</button><button id="songFavOnly" type="button">★ 收藏</button></div>
+      <div id="songList"></div><p class="hint" id="songEmpty" hidden>没有找到相关歌曲</p></div>
     <div class="col"><h3>排队</h3><div id="queueList"></div><p class="hint" id="songHint">点歌后排队，轮到你时自动上台演唱；演唱时间就是整首歌的时长。上台后会自动开麦克风并播放伴奏。</p></div>
   </div>
   <div id="karaokePlayer" class="karaoke-player">

@@ -258,6 +258,45 @@ if (window.Net) Net.on('stage', m => {           // 服务器下发：这个房�
 });
 if (window.Net) Net.on('stage_skip', () => { toast('你没有及时上台，已跳过'); });
 let qKey = '';
+let songFilter = 'all';
+let songQuery = '';
+let songFavs = new Set(Array.isArray(store.get('songFavs', [])) ? store.get('songFavs', []) : []);
+function renderSongList() {
+  const list = $('songList'), empty = $('songEmpty');
+  if (!list || !empty) return;
+  const q = songQuery.trim().toLocaleLowerCase();
+  const matches = SONGS.filter(s => {
+    if (songFilter === 'fav' && !songFavs.has(s.name)) return false;
+    if (!q) return true;
+    return (s.name + ' ' + s.artist).toLocaleLowerCase().includes(q);
+  });
+  list.textContent = '';
+  matches.forEach(s => {
+    const b = document.createElement('div'); b.className = 'song';
+    const pick = document.createElement('button'); pick.type = 'button'; pick.className = 'song-pick';
+    const main = document.createElement('span'); main.className = 'song-main'; main.append(document.createTextNode(s.name));
+    const sm = document.createElement('small'); sm.textContent = s.artist + ' · ' + fmtT(s.dur) + (s.acc ? ' · 🎵有伴奏' : ' · 清唱'); main.appendChild(sm);
+    const fav = document.createElement('button'); fav.type = 'button'; fav.className = 'song-fav' + (songFavs.has(s.name) ? ' on' : ''); fav.textContent = songFavs.has(s.name) ? '★' : '☆'; fav.title = songFavs.has(s.name) ? '取消收藏' : '收藏歌曲'; fav.setAttribute('aria-label', fav.title);
+    fav.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (songFavs.has(s.name)) songFavs.delete(s.name); else songFavs.add(s.name);
+      store.set('songFavs', [...songFavs]); renderSongList();
+    });
+    pick.appendChild(main); pick.addEventListener('click', () => enqueueMe(s));
+    b.append(pick, fav);
+    list.appendChild(b);
+  });
+  empty.hidden = matches.length !== 0;
+}
+function bindSongSearch() {
+  const input = $('songSearch'), all = $('songAll'), fav = $('songFavOnly');
+  if (!input || input.dataset.bound) return;
+  input.dataset.bound = '1';
+  input.addEventListener('input', () => { songQuery = input.value; renderSongList(); });
+  const setFilter = mode => { songFilter = mode; all.classList.toggle('on', mode === 'all'); fav.classList.toggle('on', mode === 'fav'); renderSongList(); };
+  all.addEventListener('click', () => setFilter('all'));
+  fav.addEventListener('click', () => setFilter('fav'));
+}
 function renderQueue() {
   const K = G.ktv, el = $('queueList'); if ($('songPanel').hidden) { qKey = ''; return; }
   const rows = []; if (K.cur) rows.push(Object.assign({}, K.cur, { now: true })); K.queue.forEach(x => rows.push(x));
@@ -272,10 +311,9 @@ function renderQueue() {
   });
 }
 function openSongs() {
-  const l = $('songList'); if (!l.children.length) SONGS.forEach(s => {
-    const b = document.createElement('button'); b.className = 'song'; b.append(s.name); const sm = document.createElement('small'); sm.textContent = s.artist + ' · ' + fmtT(s.dur) + (s.acc ? ' · 🎵有伴奏' : ' · 清唱'); b.appendChild(sm);
-    b.onclick = () => enqueueMe(s); l.appendChild(b);
-  });
+  bindSongSearch();
+  songQuery = $('songSearch').value || '';
+  renderSongList();
   $('songHint').textContent = (G.scene.private ? '包间点歌：' : '点歌排队（同一张地图的玩家共用一个队列）：') + '轮到你时有 25 秒走上舞台；上台后演唱时间 = 整首歌的时长，电视和左上角都有倒数；台上只有演唱者，其他人在台下观看。上台后会自动开麦克风并播放伴奏。';
   $('songPanel').hidden = false; qKey = ''; renderQueue();
 }
@@ -367,7 +405,7 @@ function update(dt) {
     inst.scale = (e.outfit.scale || 1) * 1.4 * PHONE_K();
     if (e.sit) { e.sitP = Math.min(1, e.sitP + dt / .35); const k = e.sitP * e.sitP * (3 - 2 * e.sitP), s = e.sit; e.x = e.sitFrom[0] + (s.x - e.sitFrom[0]) * k; e.z = e.sitFrom[1] + (s.z - e.sitFrom[1]) * k; e.y = s.h - SIT_DROP * k * (e.inst.scale / 1.4); e.yaw = s.yaw; e.moving = false; }
     if (e.cheerT > 0) e.cheerT -= dt;
-    if (e.pose > 0) { e.pose -= dt; clip = e.actClip || 'wave'; if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer'; // 动作短暂覆盖唱歌动作，结束后自动回到 sing，不触碰音频链
+    if (e.pose > 0) { e.pose = Math.max(0, e.pose - dt); clip = e.actClip || ((G.ktv.arrived && !e.sing && !e.sit && G.sceneId === 'plaza') ? 'cheer' : 'wave'); if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer';
     inst.hidden.SignOK = clip.replace('sit_', '') !== 'signok'; inst.hidden.SignNo = clip.replace('sit_', '') !== 'signno';   // 举牌动作才显示牌子
     inst.play(clip, .2); inst.speed = e.moving ? (e.run ? 1 : (e.isMe ? 1.1 : 1.0)) : 1;
     if (e.vis !== false || e.isMe) inst.update(dt);
@@ -445,7 +483,7 @@ function render() {
     const top = R.project([e.x, e.y + 1.78 * e.inst.scale, e.z]); if (!top) continue;
     let y = top[1] - 6 * sc2;
     if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2); y += bh + 4 * sc2; }
-    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const label = (e.isGM ? '🛡 ' : '') + e.name; const tw = ov.measureText(label).width + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isMe ? '#ffcf4a' : (e.isGM ? 'rgba(95,55,15,.9)' : 'rgba(20,16,44,.78)')); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; ov.fillText(label, top[0], ty + 1);
+    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.name).width + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)'); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; ov.fillText(e.name, top[0], ty + 1);
       if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }
 }
@@ -477,10 +515,10 @@ function bindInput() {
   addEventListener('keyup', e => { G.keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
   // tap to move
   const gl = $('gl'); let down = null;
-  gl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY, performance.now()]; });
+  const anySheetOpen = () => !!document.querySelector('.sheet:not([hidden])');
+  gl.addEventListener('pointerdown', e => { if (anySheetOpen()) { down = null; return; } down = [e.clientX, e.clientY, performance.now()]; });
   gl.addEventListener('pointerup', e => {
-    // 任意面板打开时，画布点击只用于面板外空白；绝不触发走路或玩家菜单。
-    if (document.querySelector('.sheet:not([hidden])')) { down = null; return; }
+    if (anySheetOpen()) { down = null; return; }
     if (!down || G.transitioning) return; const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]); down = null; if (moved > 10) return;
     const dpr = G.R.canvas.width / G.R.canvas.clientWidth;
     { const px = e.clientX * dpr, py = e.clientY * dpr; let hit = null, hd = 1e9;   // 点到别的玩家 → 弹出菜单（组队 / 举报 / 拉黑），而不是走过去
