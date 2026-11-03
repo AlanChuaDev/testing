@@ -1,6 +1,12 @@
 CHANGELOG.md
 README.md
 assets/girl.glb
+assets/music/beach.mp3
+assets/music/bukit.mp3
+assets/music/funfair.mp3
+assets/music/klcc.mp3
+assets/music/mall.mp3
+assets/music/plaza.mp3
 assets/songs/aiwohaishita.mp3
 assets/songs/caihong.mp3
 assets/songs/cishengbuhuan.mp3
