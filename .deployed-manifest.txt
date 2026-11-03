@@ -56,10 +56,13 @@ assets/songs/yueyawan.mp3
 assets/songs/zuiluo.lrc
 assets/songs/zuiluo.mp3
 bonds.js
+css/creator.css
 css/style.css
 index.html
 js/auth.js
 js/boutique.js
+js/creator.js
+js/face.js
 js/firebase-config.js
 js/game.js
 js/glbchar.js
@@ -71,6 +74,7 @@ js/login.js
 js/music.js
 js/net-config.js
 js/net.js
+js/outfit.js
 js/plaza.js
 js/profile.js
 js/scene-bukit-bintang.js

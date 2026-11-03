@@ -274,6 +274,15 @@ function createRenderer(canvas, opts) {
     const a = w / h, P = ortho(-cam.halfH * a, cam.halfH * a, -cam.halfH, cam.halfH, -60, 60);
     return mul(P, V);
   };
+  /* [创建面板] 运行时生成的贴图（人物脸部）：makeTexture(canvas) / updateTexture(tex, canvas) / deleteTexture(tex)，配合 inst.texOv 使用 */
+  r.makeTexture = (src) => { const t = gl.createTexture(); r.updateTexture(t, src); return t; };
+  r.updateTexture = (t, src) => {
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  };
+  r.deleteTexture = t => gl.deleteTexture(t);
   r.begin = (w, h, clear) => {
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     gl.viewport(0, 0, w, h); gl.useProgram(pr);
@@ -302,9 +311,9 @@ function createRenderer(canvas, opts) {
         gl.uniform1f(U.uSkinned, p.skin >= 0 ? 1 : 0);
         if (p.skin < 0) gl.uniformMatrix4fv(U.uModel, false, mul(M, inst.world.subarray(p.node * 16, p.node * 16 + 16)));
         gl.uniform1f(U.uPass, outlinePass ? 1 : 0);
-        gl.uniform1f(U.uOutline, outlinePass ? outW * (p.name === 'Hair' ? .75 : 1) : 0);
+        gl.uniform1f(U.uOutline, outlinePass ? outW * (p.name.indexOf('Hair') === 0 ? .75 : p.name === 'Choker' ? .35 : 1) : 0);   // [创建面板] Hair0-4 / HairM0-1 都按头发处理
         gl.uniform4fv(U.uBase, p.base); const rc = inst.recolor && inst.recolor[p.name]; gl.uniform4fv(U.uRecol, rc || [0, 0, 0, 0]); const tn = inst.tints && inst.tints[p.name]; gl.uniform3fv(U.uTint, tn || inst.tint); gl.uniform1f(U.uMask, p.mask ? 1 : 0); gl.uniform1f(U.uCut, p.cutoff);
-        gl.activeTexture(gl.TEXTURE0); if (p.tex) gl.bindTexture(gl.TEXTURE_2D, p.tex); gl.uniform1f(U.uHasTex, p.tex ? 1 : 0);
+        const tx = (inst.texOv && inst.texOv[p.name]) || p.tex; gl.activeTexture(gl.TEXTURE0); if (tx) gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1f(U.uHasTex, tx ? 1 : 0);   // [创建面板] inst.texOv：单个角色覆盖贴图
         if (p.double) gl.disable(gl.CULL_FACE); else gl.enable(gl.CULL_FACE);
         gl.bindVertexArray(vao(p)); gl.drawElements(gl.TRIANGLES, p.count, p.itype, 0);
       }

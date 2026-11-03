@@ -183,6 +183,18 @@ function cleanName(s) {
   const f = filterText(s);
   return f.hit ? "玩家" : s;
 }
+function cleanFace(f) {   // [创建面板] 脸部选项：数字限制在 0~30，颜色只收 #rrggbb，布尔收 true/false；其余字段丢弃
+  const out = {};
+  if (!f || typeof f !== "object") return out;
+  for (const k of Object.keys(f).slice(0, 24)) {
+    const v = f[k];
+    if (!/^[A-Za-z]{1,12}$/.test(k)) continue;
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = Math.max(0, Math.min(30, Math.round(v)));
+    else if (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v)) out[k] = v;
+    else if (typeof v === "boolean") out[k] = v;
+  }
+  return out;
+}
 function cleanOutfit(o) {
   if (!o || typeof o !== "object") return {};
   const out = {};
@@ -191,8 +203,15 @@ function cleanOutfit(o) {
   }
   out.bottomType = o.bottomType === "skirt" ? "skirt" : "shorts";
   out.choker = o.choker !== false;
-  out.skin = Math.max(0, Math.min(3, parseInt(o.skin) || 0));
+  out.skin = Math.max(0, Math.min(7, parseInt(o.skin) || 0));   // [创建面板] 肤色扩到 8 种
   out.scale = Math.max(0.85, Math.min(1.15, Number(o.scale) || 1));
+  // [创建面板] 创建人物新增的外观字段（性别 / 发型 / 耳朵 / 套装 / 脸）。不加这几行，别的玩家就看不到你的脸型和性别。
+  out.gender = o.gender === "m" ? "m" : "f";
+  out.hairStyle = Math.max(0, Math.min(4, parseInt(o.hairStyle) || 0));
+  out.mhair = Math.max(0, Math.min(1, parseInt(o.mhair) || 0));
+  out.ear = Math.max(0, Math.min(2, parseInt(o.ear) || 0));
+  out.set = o.set === "hoodie" ? "hoodie" : null;
+  out.face = cleanFace(o.face);
   return out;
 }
 function num(v, d = 0) {

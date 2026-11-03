@@ -13,6 +13,7 @@ const G = {
   style: QS.get('style') || 'cozy',
   R: null, GR: null, model: null, T: null, scenes: {}, scene: null, sceneId: 'plaza',
   me: null, remotes: [], coins: [], hour: 18.4, timeMode: 'auto', t: 0, joy: { x: 0, z: 0 }, keys: {}, target: null,
+  owned: store.get('owned', []),   // [创建面板] 已领取的套装（例如 'hoodie'）
   coinCount: store.get('coins', 1250), chat: { world: [], team: [], family: [] }, tab: 'world',
   cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62 }, quality: store.get('q', 1.5), outline: store.get('ol', 1),
   wide: store.get('wide', false), transitioning: false, near: null, standHot: { id: 'stand' }, stg: { mode: 'idle', queue: [] }, ktv: { queue: [], cur: null, arrived: false, online: false, mine: false, doneOk: false },
@@ -23,6 +24,7 @@ const TOPS = ['#ef6a5b', '#2fb3a3', '#f6b92b', '#6c8cf0', '#c779d9', '#ff9d5c', 
 const BOTS = ['#f4f4f8', '#2d3a5a', '#3d5a4a', '#e8a0b8', '#2b2b3a', '#c9b48a', '#8b5cf6'];
 const SOCKS = ['#6c8cf0', '#f4f4f8', '#2b2b3a', '#ff7ab6', '#5ac26e', '#f6b92b'];
 const SHOES = ['#f4f4f8', '#2b2b3a', '#ef6a5b', '#6c8cf0', '#f6b92b'];
+Outfit.init(G); Creator.init({ G, $, store, closePanels, drawPortrait });   // [创建面板] js/outfit.js + js/creator.js 需要游戏状态
 const SONGS = (window.SongData && SongData.LIST) || [];   // 歌曲表在 js/songs.js（含每首歌的时长）
 const GRACE = 25;                                                  // 轮到你后，走上舞台的时间（秒）
 
@@ -44,19 +46,13 @@ function renderLog() { $('log').innerHTML = ''; G.chat[G.tab].forEach(appendLog)
 
 /* ---------------- outfits ---------------- */
 function rgb(hexc, k) { const c = hexc.replace('#', ''); return [parseInt(c.slice(0, 2), 16) / 255 * (k || 1), parseInt(c.slice(2, 4), 16) / 255 * (k || 1), parseInt(c.slice(4, 6), 16) / 255 * (k || 1)]; }
-function applyOutfit(inst, o) {
-  inst.recolor = {}; inst.tints = {};
-  const rc = (name, hexc, k) => { if (hexc) { const c = rgb(hexc, k || 1).map(v => Math.min(v, 1.3)); inst.recolor[name] = [c[0], c[1], c[2], .92]; } };
-  rc('Hair', o.hair, 2.1); rc('Hair0', o.hair, 2.1); rc('Top', o.top, 1); rc('Shorts', o.bottom, 1); rc('Skirt', o.bottom, 1); rc('Socks', o.socks, 1); rc('Shoes', o.shoes, 1);
-  const sk = SKIN[o.skin || 0]; inst.tints.Body = sk; inst.tints.Head = sk; inst.tints.Head0 = sk;
-  const skirt = o.bottomType === 'skirt'; inst.hidden.Skirt = !skirt; inst.hidden.Shorts = skirt;
-  inst.hidden.Choker = o.choker === false;
-  inst.scale = (o.scale || 1) * 1.4;
-}
-const DEFAULT_OUTFIT = { hair: null, top: null, bottom: null, socks: null, shoes: null, bottomType: 'shorts', choker: true, skin: 0, scale: 1 };
+/* [创建面板] 外观逻辑搬到了 js/outfit.js（脸型 / 发型 / 性别 / 耳朵 / 套装 / 颜色）。
+   这里只留两个同名入口，让 game.js 和 net.js 原来的调用（applyOutfit / DEFAULT_OUTFIT）不用改。 */
+function applyOutfit(inst, o) { Outfit.applyOutfit(inst, o); inst.scale = (o.scale || 1) * 1.4; }
+const DEFAULT_OUTFIT = Outfit.DEFAULT_OUTFIT;
 /* ---------------- entities ---------------- */
 function makeEntity(x, z, name, outfit, isMe) {
-  const inst = GLBChar.makeInstance(G.model, G.GR); inst.play('idle', .01);
+  const inst = GLBChar.makeInstance(G.model, G.GR); inst.play('idle', .01); inst.isMe = !!isMe;
   const e = { x, y: 0, z, name, outfit, isMe: !!isMe, inst, yaw: rand(-PI, PI), vx: 0, vz: 0, wait: rand(0, 5), target: null, stuck: 0, moving: false, run: false, bubble: null, bt: 0, pose: 0, mode: 'wander', phase: rand(0, 6), nearT: 0, canStage: false, sit: null, sitT: 0, sitP: 1, cheerT: 0, sing: false };
   applyOutfit(inst, outfit); inst.yaw = e.yaw; inst.pos = [x, 0, z]; inst.update(rand(0, 2));
   return e;
@@ -339,22 +335,7 @@ function openActions() {
   });
   $('actPanel').hidden = false;
 }
-function openWardrobe() {
-  const o = G.me.outfit, root = $('wardOpts'); root.innerHTML = '';
-  const row = (label, key, list, def) => {
-    const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<label>${label}</label>`;
-    if (def) { const b = document.createElement('button'); b.className = 'sw def' + (!o[key] ? ' on' : ''); b.title = '默认'; b.onclick = () => { o[key] = null; commit(); }; r.appendChild(b); }
-    list.forEach(c => { const b = document.createElement('button'); b.className = 'sw' + (o[key] === c ? ' on' : ''); b.style.background = c; b.onclick = () => { o[key] = c; commit(); }; r.appendChild(b); });
-    root.appendChild(r);
-  };
-  const chips = (label, key, opts) => { const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<label>${label}</label>`; opts.forEach(([v, t]) => { const b = document.createElement('button'); b.className = 'chip' + (o[key] === v ? ' on' : ''); b.textContent = t; b.onclick = () => { o[key] = v; commit(); }; r.appendChild(b); }); root.appendChild(r); };
-  const commit = () => { applyOutfit(G.me.inst, o); store.set('outfit', o); openWardrobe(); };
-  row('发色', 'hair', HAIRS, true); row('上衣', 'top', TOPS, true); chips('下装', 'bottomType', [['shorts', '短裤'], ['skirt', '短裙']]); row('下装色', 'bottom', BOTS, true);
-  row('袜子', 'socks', SOCKS, true); row('鞋子', 'shoes', SHOES, true); chips('项圈', 'choker', [[true, '戴'], [false, '不戴']]);
-  const sr = document.createElement('div'); sr.className = 'row'; sr.innerHTML = '<label>肤色</label>'; SKIN.forEach((s, i) => { const b = document.createElement('button'); b.className = 'sw' + ((o.skin || 0) === i ? ' on' : ''); b.style.background = `rgb(${255 * s[0] | 0},${(214 * s[1]) | 0},${(190 * s[2]) | 0})`; b.onclick = () => { o.skin = i; commit(); }; sr.appendChild(b); }); root.appendChild(sr);
-  const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = '之后的衣服 / 发型会做成商店里卖的 GLB 部件，用金币购买后放进背包更换。'; root.appendChild(hint);
-  $('wardPanel').hidden = false;
-}
+function openWardrobe() { Creator.open(); }   // [创建面板] 换装按钮 / 衣橱镜子 → 打开创建人物面板（js/creator.js）
 /* ---------------- elevator (天皇巨星) ---------------- */
 const FLOORS = [['ktv3', '3F', '欢唱包间 · 16 间'], ['ktv2', '2F', 'VIP 至尊包间 · 8 间'], ['ktv', '1F', '接待大堂']];
 function openElev() {
@@ -598,14 +579,14 @@ async function boot() {
     { const st = Scenes.PLAZA_STYLES[G.style] || Scenes.PLAZA_STYLES.cozy; G.hour = QS.get('t') ? parseFloat(QS.get('t')) : st.hour; if (QS.get('t')) G.timeMode = 'x'; }
     G.scene = getScene('plaza'); enterScene('plaza'); spawnCoins();
     if (QS.get('pz')) { G.me.z = parseFloat(QS.get('pz')); G.cam.target[2] = G.me.z - G.scene.camera.lead; }
-    bindInput(); setCoins(G.coinCount); updateClock(); syncSeg(); renderLog();
+    bindInput(); Creator.bind(); setCoins(G.coinCount); updateClock(); syncSeg(); renderLog();
     let last = performance.now(), clk = 0, firstPortrait = true;
     let errAt = -1e9;
     const frame = now => {
       requestAnimationFrame(frame);        // 先排下一帧：这一帧哪怕出错，游戏循环也不会停
       const dt = Math.min(.05, (now - last) / 1000); last = now; clk += dt;
       try {
-        update(dt); render();
+        update(dt); render(); if (Creator.isOpen()) Creator.drawPreview(dt);   // [创建面板] 面板左边的实时预览
         if (firstPortrait) { firstPortrait = false; $('loading').classList.add('done'); try { drawPortrait(); } catch (e) { console.error(e); } }
         if (clk > .4) { clk = 0; updateClock(); }
       } catch (err) { if (now - errAt > 3000) { errAt = now; console.error('frame error', err); } }
@@ -619,6 +600,7 @@ async function boot() {
     requestAnimationFrame(frame);
     G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
     if (window.Net) Net.start(G);
+    if (store.get('new_char', false)) { store.set('new_char', false); setTimeout(() => Creator.open(), 600); }   // [创建面板] 新建角色后第一次进游戏：自动弹出创建人物面板
   } catch (err) { console.error(err); text.textContent = '加载失败：' + err.message + '（需要支持 WebGL2 的浏览器）'; }
 }
 (window.loginReady || Promise.resolve()).then(boot);

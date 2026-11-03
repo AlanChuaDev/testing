@@ -50,7 +50,7 @@ $('lgGo').onclick = () => {
   const name = $('lgInput').value.replace(/[<>]/g, '').trim().slice(0, 12);
   if (name.length < 1) { $('lgErr').textContent = '请先给角色起个名字'; return; }
   profile = { uid: (profile && profile.uid) || ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + Math.random().toString(16).slice(2)), name };
-  lsSet('sc_profile', profile); lsSet('sc_outfit', outfit); enter();
+  lsSet('sc_profile', profile); lsSet('sc_outfit', outfit); lsSet('sc_new_char', true); enter();   // [创建面板] sc_new_char：进游戏后自动弹出创建人物面板
 };
 $('lgEnter').onclick = enter;
 $('lgNew').onclick = () => show('create');
