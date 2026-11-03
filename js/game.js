@@ -369,6 +369,7 @@ function closePanels() { document.querySelectorAll('.sheet').forEach(p => p.hidd
 function setBubble(e, text) { e.bubble = text.length > 26 ? text.slice(0, 25) + '…' : text; e.bt = 4.5; }
 function sendChat(text) {
   text = text.trim(); if (!text) return;
+  if (text.toLowerCase() === '/ver') return toast('当前版本：' + (window.APP_V || '?'), 3000);     // 聊天框输入 /ver 查看当前加载的版本号（确认更新有没有生效）
   if (text.toLowerCase() === '/gm') {      // GM 入口：聊天框输入 /gm，不发给任何人，直接打开 GM 密钥框，并把失败原因显示在屏幕上
     try {
       if (!window.GM || typeof GM.open !== 'function') return toast('GM 模块没有启动（gm.js 未加载或未绑定），版本 ' + (window.APP_V || '?'), 4000);

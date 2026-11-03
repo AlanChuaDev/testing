@@ -191,9 +191,10 @@ function build() {
   const menu = h('section', { class: 'sheet small', id: 'playerMenu', hidden: '' }, h('header', null, h('h2', { id: 'pmName', text: '' }), h('button', { class: 'x', type: 'button', text: '✕', onclick: closeMenu })), h('div', { id: 'pmBody' }));
   const inv = h('div', { id: 'invitePop', hidden: '' });
   document.body.append(panel, menu, inv);
-  /* 防误点：菜单是在手指抬起时弹出来的，手机浏览器随后补发的「点击」会落在刚出现、正好在手指下面的按钮上（拉黑 / 加好友）。
-     所以菜单出现后 0.5 秒内，菜单里的触摸和点击一律忽略。 */
-  ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'mousedown', 'mouseup'].forEach(ev => menu.addEventListener(ev, e => { if (performance.now() - menuAt < 500) { e.stopPropagation(); e.preventDefault(); } }, true));
+  /* 防误点：菜单是在手指抬起时弹出来的，手机随后补发的「点击」会落在刚出现、正好在手指下面的按钮上（点头部 = 加好友，点脚 = 拉黑）。
+     所以：菜单里的点击，必须是「菜单出现之后，手指又在菜单里按下去」才算数；补发的那次点击没有对应的按下，一律忽略。 */
+  menu.addEventListener('pointerdown', () => { menuDownAt = performance.now(); }, true);
+  menu.addEventListener('click', e => { if (e.detail !== 0 && menuDownAt <= menuAt) { e.stopPropagation(); e.preventDefault(); } }, true);   // detail 0 = 键盘触发，放行
   renderHud(); renderBlockList();
   const wn = $('whatsNew'); if (wn) { wn.textContent = ''; ['v2 更新：', '· 修复唱完歌后卡在舞台楼梯', '· 演唱时长 = 歌曲时长；舞台队列改由服务器统一排队', '· 删除全部 NPC，只剩真人玩家', '· K 歌音效：混响 / 回声 / 明亮度 / 混音，音质提升', '· 组队：跨地图聊天与语音、闭麦 / 闭喇叭、说话指示、一键传送', '· 点击玩家：组队邀请 / 举报 / 拉黑', '· 聊天过滤 + 限速；断线自动重连并恢复队伍'].forEach(t => wn.append(h('div', { text: t }))); }
   if (window.Karaoke && Karaoke.mountFx) { Karaoke.mountFx($('fxSong')); Karaoke.mountFx($('fxSet')); }
@@ -253,11 +254,11 @@ function showInvite(m) {
 }
 
 /* ---------- 点击玩家的菜单：组队邀请 / 举报 / 拉黑 ---------- */
-let menuEnt = null, menuAt = 0;
+let menuEnt = null, menuAt = 0, menuDownAt = 0;
 function closeMenu() { $('playerMenu').hidden = true; menuEnt = null; }
 function openPlayerMenu(e) {
   if (!e || !e.pid) return;
-  closeSheets(); menuEnt = e; menuMain(); menuAt = performance.now(); $('playerMenu').hidden = false;
+  closeSheets(); menuEnt = e; menuMain(); menuAt = performance.now(); menuDownAt = 0; $('playerMenu').hidden = false;
 }
 function menuMain() {
   const e = menuEnt, body = $('pmBody'); $('pmName').textContent = e.name; body.textContent = '';
