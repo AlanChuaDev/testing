@@ -109,10 +109,18 @@ function renderFriends() {
     h('button', { class: 'chip on', type: 'button', text: '同意', onclick: () => send({ type: 'friend_accept', pub: r.pub }) }), h('button', { class: 'chip', type: 'button', text: '拒绝', onclick: () => send({ type: 'friend_decline', pub: r.pub }) })))); }
   wrap.append(h('h3', { text: '我的好友（' + S.friends.length + '）' }));
   if (!S.friends.length) wrap.append(h('p', { class: 'hint', text: '还没有好友。点场景里的玩家 → 加好友。' }));
-  [...S.friends].sort((a, c) => (c.online ? 1 : 0) - (a.online ? 1 : 0)).forEach(f => wrap.append(h('div', { class: 'frRow' },
+  const bondLine = f => {                       // 亲密度：等级 + 进度条 + 每日问暖
+    const b = f.bond; if (!b) return null;
+    const pct = b.maxed ? 100 : Math.max(0, Math.min(100, Math.round(100 * b.into / Math.max(1, b.need))));
+    return h('div', { class: 'frBond' }, h('span', { class: 'frLv', text: '💞 Lv.' + b.level }),
+      h('div', { class: 'frBar', title: b.maxed ? '亲密度已满级' : '距离下一级 ' + (b.need - b.into) }, h('i', { style: 'width:' + pct + '%' })),
+      h('span', { class: 'frXp', text: b.maxed ? 'MAX' : b.into + '/' + b.need }),
+      h('button', { class: 'chip' + (b.careDone ? '' : ' on'), type: 'button', text: b.careDone ? '✔ 已问暖' : '💌 问暖', disabled: b.careDone ? '' : null, onclick: () => send({ type: 'care', pub: f.pub }) }));
+  };
+  [...S.friends].sort((a, c) => (c.online ? 1 : 0) - (a.online ? 1 : 0)).forEach(f => wrap.append(h('div', { class: 'frItem' }, h('div', { class: 'frRow' },
     h('i', { class: 'frDot' + (f.online ? ' on' : '') }), h('span', { class: 'frN', text: f.name || '玩家' }), f.unread ? h('b', { class: 'frUn', text: f.unread > 99 ? '99+' : String(f.unread) }) : null,
     h('button', { class: 'chip', type: 'button', text: '资料', onclick: () => viewProfile(f.pub) }), h('button', { class: 'chip on', type: 'button', text: '私信', onclick: () => openDm(f.pub, f.name) }),
-    h('button', { class: 'chip', type: 'button', text: '✕', title: '删除好友', onclick: () => { if (confirm('删除好友「' + (f.name || '') + '」？')) send({ type: 'friend_remove', pub: f.pub }); } }))));
+    h('button', { class: 'chip', type: 'button', text: '✕', title: '删除好友', onclick: () => { if (confirm('删除好友「' + (f.name || '') + '」？')) send({ type: 'friend_remove', pub: f.pub }); } })), bondLine(f))));
   b.append(wrap);
 }
 function totalUnread() { return S.friends.reduce((n, f) => n + (f.unread || 0), 0) + S.inReq.length; }
@@ -162,6 +170,7 @@ on('friends', m => {
   S.friends = m.friends || []; S.inReq = m.inReq || []; S.outReq = m.outReq || [];
   badge(); if (!frP.hidden) renderFriends(); if (!vwP.hidden && S.viewPub) send({ type: 'profile_get', pub: S.viewPub });
 });
+on('care_ok', m => { toast('💌 已问暖，亲密度 +' + (m.gained || 0) + (m.streak > 1 ? '（连续 ' + m.streak + ' 天）' : ''), 2600); });
 on('friend_req', m => { toast('👥 ' + (m.name || '有人') + ' 想加你为好友', 3000); });
 on('presence', m => { const f = S.friends.find(x => x.pub === m.pub); if (f) { f.online = m.online; f.room = m.room; if (!frP.hidden) renderFriends(); if (m.online && m.name) toast('💚 好友 ' + m.name + ' 上线了', 1800); } });
 on('dm_history', m => { if (m.pub !== S.dmPub) return; S.dmMsgs = (m.msgs || []).map(x => ({ mine: !!x.mine, text: x.text, at: x.at })); renderDm(); });

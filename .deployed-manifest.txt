@@ -55,6 +55,7 @@ assets/songs/yueyawan.lrc
 assets/songs/yueyawan.mp3
 assets/songs/zuiluo.lrc
 assets/songs/zuiluo.mp3
+bonds.js
 css/style.css
 index.html
 js/auth.js

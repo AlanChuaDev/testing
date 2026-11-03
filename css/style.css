@@ -362,4 +362,11 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .lgOr::before,.lgOr::after{content:"";flex:1;height:1px;background:var(--line)}
 .lgGoogle{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:10px 14px;border-radius:12px;background:#fff;color:#3c4043;font-size:15px;font-weight:800;border:0}
 .lgGoogle:active{filter:brightness(.92)}
+/* 好友亲密度：等级 + 进度条 + 问暖 */
+.frItem{border-bottom:1px solid #ffffff12;padding-bottom:6px}.frItem .frRow{border-bottom:0;padding-bottom:2px}
+.frBond{display:flex;align-items:center;gap:8px;padding:2px 0 0 15px}
+.frLv{font-size:12px;font-weight:900;color:#ffd36e;white-space:nowrap}
+.frBar{flex:1;min-width:40px;height:8px;border-radius:99px;background:#ffffff1f;overflow:hidden}
+.frBar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ff8fd8,#ffd36e);transition:width .4s}
+.frXp{font-size:11px;opacity:.75;white-space:nowrap;min-width:46px;text-align:right}
 

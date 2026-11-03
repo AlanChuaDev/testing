@@ -136,6 +136,8 @@ function filterText(s) {
 let SocialMod = null; try { SocialMod = require("./social.js"); } catch (e) { console.warn("social.js not found:", e.message); }
 const AUTH = SocialMod ? SocialMod.createAuth() : null;
 const S = AUTH ? SocialMod.create({ store: AUTH.store, filterText }) : null;
+let BondsMod = null; try { BondsMod = require("./bonds.js"); } catch (e) { console.warn("bonds.js not found:", e.message); }
+const B = S && BondsMod ? BondsMod.create({ store: AUTH.store }) : null;   // 好友亲密度（没登录服务 / 没 bonds.js 时关闭）
 const UE = (m) => { const e = new Error(m); e.user = true; return e; };
 const byPubWs = new Map(); // pub -> 当前在线的连接（登录用户）
 
@@ -222,10 +224,41 @@ function pushOnline() { // 全服在线人数（防抖）
 }
 
 const withPresence = (v) => { v.friends.forEach((f) => { const w = byPubWs.get(f.pub); f.online = !!w; f.room = w ? w.room : null; }); return v; };
+async function withBonds(me, v) { // 给每个好友附上亲密度（等级 / 进度条 / 今天问暖了没）
+  if (B) { try { const bm = await B.view(me, v.friends.map((f) => f.pub)); v.friends.forEach((f) => { f.bond = bm[f.pub] || null; }); } catch (e) { console.warn("bond view failed:", e.message); } }
+  return v;
+}
 async function pushFriends(pub) { // 把最新的好友列表推给在线的人
   const w = byPubWs.get(pub); if (!w || !S) return;
-  const v = await S.friendsView(pub); w.friendSet = new Set(v.friends.map((f) => f.pub)); send(w, Object.assign({ type: "friends" }, withPresence(v)));
+  const v = await S.friendsView(pub); w.friendSet = new Set(v.friends.map((f) => f.pub)); send(w, Object.assign({ type: "friends" }, await withBonds(pub, withPresence(v))));
 }
+function bondNotify(a, b, r) { // 升级了：通知双方，并刷新好友列表上的进度条
+  if (!r || !r.gained) return;
+  if (r.levelUp) {
+    const wa = byPubWs.get(a), wb = byPubWs.get(b);
+    if (wa) send(wa, { type: "toast", message: "💞 你和 " + ((wb && wb.name) || "好友") + " 的亲密度升到 Lv." + r.levelUp + " 了！" });
+    if (wb) send(wb, { type: "toast", message: "💞 你和 " + ((wa && wa.name) || "好友") + " 的亲密度升到 Lv." + r.levelUp + " 了！" });
+  }
+  pushFriends(a).catch(() => {}); pushFriends(b).catch(() => {});
+}
+const bondGain = (a, b, kind, n) => { if (!B) return; B.gain(a, b, kind, n).then((r) => bondNotify(a, b, r)).catch((e) => console.warn("bond gain failed:", e.message)); };   // 其他功能加亲密度统一走这个：bondGain(甲pub, 乙pub, "duet" | "gift" | ..., 数量)
+
+// 每分钟一次：互为好友、同在一张地图 / 同一个队伍的，各加 1 点（每天有上限，GM 隐身的不算）
+setInterval(async () => {
+  if (!B) return;
+  try {
+    const seen = new Set();
+    for (const ws of [...byPubWs.values()]) {
+      if (!ws.friendSet || !ws.friendSet.size || ws.gmInvisible || !ws.room) continue;
+      for (const p of ws.friendSet) {
+        const w = byPubWs.get(p); if (!w || w.gmInvisible || !w.room || !w.friendSet || !w.friendSet.has(ws.pub)) continue;
+        const key = ws.pub < p ? ws.pub + "_" + p : p + "_" + ws.pub; if (seen.has(key)) continue; seen.add(key);
+        if (w.room === ws.room) bondGain(ws.pub, p, "room", 1);
+        const ta = teamOf.get(ws.pub); if (ta && ta === teamOf.get(p)) bondGain(ws.pub, p, "team", 1);
+      }
+    }
+  } catch (e) { console.warn("bond tick failed:", e.message); }
+}, 60000);
 function presence(ws) { // 我上线 / 下线 / 换地图：告诉在线的好友
   for (const p of ws.friendSet || []) { const w = byPubWs.get(p); if (w) send(w, { type: "presence", pub: ws.pub, name: ws.name, online: !ws.closed, room: ws.closed ? null : ws.room }); }
 }
@@ -729,7 +762,7 @@ wss.on("connection", (ws) => {
         const t = teamOfWs(ws); if (t) { const mem = t.members.get(ws.pub); if (mem) mem.name = p.name; teamSend(t); }
         presence(ws); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true, renamed: true });
       }
-      if (m.type === "friends_get") { const v = await S.friendsView(ws.pub); ws.friendSet = new Set(v.friends.map((f) => f.pub)); return send(ws, Object.assign({ type: "friends" }, withPresence(v))); }
+      if (m.type === "friends_get") { const v = await S.friendsView(ws.pub); ws.friendSet = new Set(v.friends.map((f) => f.pub)); return send(ws, Object.assign({ type: "friends" }, await withBonds(ws.pub, withPresence(v)))); }
       if (m.type === "friend_request") {
         const to = pubArg(), r = await S.request(ws.pub, to), tw = byPubWs.get(to);
         if (r.auto) { send(ws, { type: "toast", message: "你们已成为好友 🎉" }); if (tw) send(tw, { type: "toast", message: ws.name + " 和你成为了好友 🎉" }); }
@@ -747,6 +780,21 @@ wss.on("connection", (ws) => {
         const r = await S.sendDm(ws.pub, to, g.text);
         send(ws, { type: "dm", pub: to, mine: true, text: g.text, at: r.at });
         if (tw) send(tw, { type: "dm", pub: ws.pub, name: ws.name, mine: false, text: g.text, at: r.at });
+        bondGain(ws.pub, to, "dm", 1);
+        return;
+      }
+      if (m.type === "care") { // 每日问暖：给好友发一句问候，双方亲密度增加；每人每天对每个好友一次
+        if (!B) throw UE("暂时不能问暖");
+        const to = pubArg(), f = await S.getF(ws.pub); if (!f.friends.includes(to)) throw UE("需要先成为好友");
+        if ((await B.careStatus(ws.pub, to)).done) return send(ws, { type: "toast", message: "今天已经问暖过 TA 了，明天再来 💌" });
+        const text = B.greeting(), tw = byPubWs.get(to);
+        if (tw && isBlocked(ws, tw)) throw UE("对方没有收到这条消息");
+        const sr = await S.sendDm(ws.pub, to, text);   // 对方拉黑了你的话这里会报错，不会加亲密度
+        send(ws, { type: "dm", pub: to, mine: true, text, at: sr.at });
+        if (tw) send(tw, { type: "dm", pub: ws.pub, name: ws.name, mine: false, text, at: sr.at });
+        const r = await B.care(ws.pub, to);
+        send(ws, { type: "care_ok", pub: to, gained: r.gained, streak: r.streak });
+        bondNotify(ws.pub, to, r);
         return;
       }
       if (m.type === "dm_history") { const o = pubArg(); return send(ws, { type: "dm_history", pub: o, msgs: await S.dmHistory(ws.pub, o, 50) }); }
