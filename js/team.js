@@ -191,6 +191,9 @@ function build() {
   const menu = h('section', { class: 'sheet small', id: 'playerMenu', hidden: '' }, h('header', null, h('h2', { id: 'pmName', text: '' }), h('button', { class: 'x', type: 'button', text: '✕', onclick: closeMenu })), h('div', { id: 'pmBody' }));
   const inv = h('div', { id: 'invitePop', hidden: '' });
   document.body.append(panel, menu, inv);
+  /* 防误点：菜单是在手指抬起时弹出来的，手机浏览器随后补发的「点击」会落在刚出现、正好在手指下面的按钮上（拉黑 / 加好友）。
+     所以菜单出现后 0.5 秒内，菜单里的触摸和点击一律忽略。 */
+  ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'mousedown', 'mouseup'].forEach(ev => menu.addEventListener(ev, e => { if (performance.now() - menuAt < 500) { e.stopPropagation(); e.preventDefault(); } }, true));
   renderHud(); renderBlockList();
   const wn = $('whatsNew'); if (wn) { wn.textContent = ''; ['v2 更新：', '· 修复唱完歌后卡在舞台楼梯', '· 演唱时长 = 歌曲时长；舞台队列改由服务器统一排队', '· 删除全部 NPC，只剩真人玩家', '· K 歌音效：混响 / 回声 / 明亮度 / 混音，音质提升', '· 组队：跨地图聊天与语音、闭麦 / 闭喇叭、说话指示、一键传送', '· 点击玩家：组队邀请 / 举报 / 拉黑', '· 聊天过滤 + 限速；断线自动重连并恢复队伍'].forEach(t => wn.append(h('div', { text: t }))); }
   if (window.Karaoke && Karaoke.mountFx) { Karaoke.mountFx($('fxSong')); Karaoke.mountFx($('fxSet')); }
@@ -250,11 +253,11 @@ function showInvite(m) {
 }
 
 /* ---------- 点击玩家的菜单：组队邀请 / 举报 / 拉黑 ---------- */
-let menuEnt = null;
+let menuEnt = null, menuAt = 0;
 function closeMenu() { $('playerMenu').hidden = true; menuEnt = null; }
 function openPlayerMenu(e) {
   if (!e || !e.pid) return;
-  closeSheets(); menuEnt = e; menuMain(); $('playerMenu').hidden = false;
+  closeSheets(); menuEnt = e; menuMain(); menuAt = performance.now(); $('playerMenu').hidden = false;
 }
 function menuMain() {
   const e = menuEnt, body = $('pmBody'); $('pmName').textContent = e.name; body.textContent = '';
@@ -267,7 +270,7 @@ function menuMain() {
     btn('🤝 组队邀请' + (reason ? '（' + reason + '）' : ''), () => { Net.send({ type: 'team_invite', to: e.pid }); closeMenu(); }, '', !canInvite),
     ...friendButtons(e, btn),
     btn('🚩 举报', menuReport, 'warn', !e.pub),
-    blocked ? btn('✅ 取消拉黑', () => { unblock(e.pub); menuMain(); }) : btn('🚫 拉黑', () => { block(e.pub, e.name, e.pid); closeMenu(); }, 'warn', !e.pub),
+    blocked ? btn('✅ 取消拉黑', () => { unblock(e.pub); menuMain(); }) : btn('🚫 拉黑', () => { if (!confirm('确定拉黑「' + e.name + '」？')) return; block(e.pub, e.name, e.pid); closeMenu(); }, 'warn', !e.pub),
     h('p', { class: 'hint', text: '查看资料、加好友、私信：之后的版本开放。' }));
   if (window.GM && window.GM.isGM && e.pid !== Net.myId()) {
     const admin = h('div', { class: 'gm-player-tools' }, h('div', { class: 'gm-player-title', text: '✦ GM 管理权限 ✦' }));
