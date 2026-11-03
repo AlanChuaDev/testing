@@ -1,7 +1,9 @@
 CHANGELOG.md
 README.md
 assets/girl.glb
+assets/songs/cishengbuhuan.mp3
 assets/songs/guchu.mp3
+assets/songs/ruyuan.mp3
 assets/songs/xiaoxingyun.mp3
 css/style.css
 index.html
