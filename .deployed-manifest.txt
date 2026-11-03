@@ -9,6 +9,7 @@ assets/songs/ezuoju.mp3
 assets/songs/guchu.mp3
 assets/songs/gushen.mp3
 assets/songs/houhuiwuqi.mp3
+assets/songs/jingqioqio.mp3
 assets/songs/kebukeyi.mp3
 assets/songs/ruyuan.mp3
 assets/songs/shanhuhai.mp3
