@@ -368,7 +368,15 @@ function closePanels() { document.querySelectorAll('.sheet').forEach(p => p.hidd
 /* ---------------- chat ---------------- */
 function setBubble(e, text) { e.bubble = text.length > 26 ? text.slice(0, 25) + '…' : text; e.bt = 4.5; }
 function sendChat(text) {
-  text = text.trim(); if (!text) return; addMsg(G.tab, '我', text, true); setBubble(G.me, text); if (window.Net) Net.sendChat(G.tab, text);
+  text = text.trim(); if (!text) return;
+  if (text.toLowerCase() === '/gm') {      // GM 入口：聊天框输入 /gm，不发给任何人，直接打开 GM 密钥框，并把失败原因显示在屏幕上
+    try {
+      if (!window.GM || typeof GM.open !== 'function') return toast('GM 模块没有启动（gm.js 未加载或未绑定），版本 ' + (window.APP_V || '?'), 4000);
+      GM.open();
+      const gp = $('gmPanel'); if (!gp || gp.hidden) toast('GM 面板没有打开，版本 ' + (window.APP_V || '?'), 4000);
+    } catch (e) { toast('GM 打开出错：' + (e && e.message || e), 5000); }
+    return;
+  } addMsg(G.tab, '我', text, true); setBubble(G.me, text); if (window.Net) Net.sendChat(G.tab, text);
 }
 /* ---------------- coins (plaza) ---------------- */
 function spawnCoins() {

@@ -249,11 +249,20 @@ function bind() {
   $('gmOpen').onclick = open;
   $('gmFab').onclick = open;
   /* 隐藏入口：在「设置」里连点标题 7 次才会出现 GM 密钥输入框；普通玩家界面上没有任何 GM 字样 */
-  const st = document.querySelector('#setPanel h2'); let taps = 0, tapT = 0;
-  if (st) st.addEventListener('click', () => {
+  /* 监听整个设置面板的标题栏（捕获阶段），手机上点到标题文字、空白处都算；点关闭按钮不算 */
+  let taps = 0, tapT = 0;
+  const sp = $('setPanel');
+  if (sp) sp.addEventListener('click', e => {
+    const t = e.target; if (!t || !t.closest || !t.closest('header') || t.closest('.x')) return;
     const n = Date.now(); taps = n - tapT < 1500 ? taps + 1 : 1; tapT = n;
     if (taps >= 7) { taps = 0; open(); }
-  });
+  }, true);
+  window.GM.open = open;                       // 兜底：控制台输入 GM.open() 也能打开
+  /* 兜底入口：网址带 #gm 或 ?gm=1，进游戏后自动弹出 GM 密钥框（等 joined 之后，避免被切场景时的 closePanels 关掉） */
+  if (/[#&?]gm(=1)?(&|$)/.test(location.hash + location.search)) {
+    let done = false;
+    Net.on('joined', () => { if (done) return; done = true; setTimeout(open, 800); });
+  }
   $('gmNav').querySelectorAll('button').forEach(b => b.onclick = () => show(b.dataset.page));
   document.querySelectorAll('#gmPanel [data-goto]').forEach(b => b.onclick = () => show(b.dataset.goto));
   ['gmKey', 'gmPlayerSearch', 'gmAnnouncementText', 'gmLrc'].forEach(id => $(id).addEventListener('keydown', e => e.stopPropagation()));   // 打字时不触发游戏热键
