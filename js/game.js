@@ -555,8 +555,8 @@ function interact() {
 function drawPortrait() {
   const gl = G.R.gl, GR = G.GR, me = G.me, S = 256, ctx = $('avatar').getContext('2d');
   const old = me.inst.pos.slice(), oy = me.inst.yaw; me.inst.pos = [0, 0, 0]; me.inst.yaw = 0.25; me.inst.update(0);
-  gl.viewport(0, 0, S, S); gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, S, S); gl.clearColor(.72, .66, .95, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
-  const vp = GR.viewProj({ yaw: 0, pitch: 0, halfH: .2, target: [0, 1.5, 0] }, S, S);
+  gl.viewport(0, 0, S, S); gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, S, S); gl.clearColor(.62, .56, .9, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
+  const vp = GR.viewProj({ yaw: 0, pitch: 0, halfH: .43, target: [0, 2.3, 0] }, S, S);   // [头像] 对准头部+肩膀（角色已放大 1.4 倍，原来对准胸口所以只看到上衣）
   GR.draw(me.inst, vp, { outline: .006, amb: [.62, .6, .78], sun: [.45, .42, .26], line: [.23, .14, .17], light: [-.3, .5, 1], view: [0, 0, 1] });
   ctx.clearRect(0, 0, 128, 128); ctx.drawImage(G.R.canvas, 0, G.R.canvas.height - S, S, S, 0, 0, 128, 128);
   gl.disable(gl.SCISSOR_TEST); me.inst.pos = old; me.inst.yaw = oy;
