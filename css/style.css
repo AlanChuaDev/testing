@@ -380,9 +380,10 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
    规则：面板不超过屏幕；标题栏 + ✕ 固定在顶部；内容区可以上下滑动，滑到最底下的东西也能点到。 */
 @media (max-height:520px){
   .sheet{max-height:calc(100dvh - 12px - var(--sa-t) - var(--sa-b));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-  .sheet header{position:sticky;top:0;z-index:5;flex:0 0 auto;background:var(--panel2);padding:6px 12px}
+  .sheet header{position:sticky;top:0;z-index:5;flex:0 0 auto;background:#241c48;padding:6px 12px}   /* 不透明：内容滑到标题栏下面时不会透出来 */
   .sheet h2{font-size:15px}.sheet .x{width:34px;height:34px;font-size:16px}
   /* 点歌机：整个面板一起滑，歌单在上、播放区在下；播放区压缩成紧凑版 */
+  #songPanel,#setPanel{overflow-y:auto}   /* 上面 #songPanel{overflow:hidden} 的优先级更高，必须在这里再写一次，否则手机上整个面板滑不动 */
   #songPanel .cols{flex:0 0 auto;overflow:visible;padding:8px 12px}
   #songPanel #songList{max-height:none}
   #songPanel .karaoke-player{margin:6px 12px 10px;padding:8px 10px}
@@ -400,3 +401,9 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
   #dmP .pfBody{height:calc(100dvh - 70px - var(--sa-t) - var(--sa-b))}
   #teamBody{overflow:visible}
 }
+
+/* ===== 手机触摸滑动修复 =====
+   根因：html,body 设了 touch-action:none（为了摇杆 / 画面拖动），导致里面的面板用手指根本滑不动（电脑 / 鼠标滚轮正常，所以平板上没发现）。
+   这里让所有面板、聊天记录、登录页允许「竖向滑动」；左右滑动的导航条单独允许横向。 */
+.sheet,.sheet *,#log,#login,#login *{touch-action:pan-y}
+#gmPanel .gmNav,#gmPanel .gmNav *{touch-action:pan-x pan-y}
