@@ -1,6 +1,7 @@
 CHANGELOG.md
 README.md
 assets/girl.glb
+assets/songs/caihong.mp3
 assets/songs/cishengbuhuan.mp3
 assets/songs/damian.mp3
 assets/songs/daoshu.mp3
@@ -10,9 +11,13 @@ assets/songs/gushen.mp3
 assets/songs/houhuiwuqi.mp3
 assets/songs/kebukeyi.mp3
 assets/songs/ruyuan.mp3
+assets/songs/shanhuhai.mp3
 assets/songs/shuohaodexinfune.mp3
+assets/songs/tiantian.mp3
+assets/songs/wozhidao.mp3
 assets/songs/wumeizijiang.mp3
 assets/songs/xiaoxingyun.mp3
+assets/songs/xiayezuihoudeyanhuo.mp3
 assets/songs/yidileideshijian.mp3
 assets/songs/youdiantian.mp3
 assets/songs/yueyawan.mp3
