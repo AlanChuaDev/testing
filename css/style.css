@@ -269,20 +269,86 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .gm-admin-audit{margin-top:12px;padding-top:8px;border-top:1px solid #d9b85a55}
 .gm-admin-audit pre{max-height:130px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:#ffe8a0;font:11px/1.45 ui-monospace,monospace;background:#09071888;padding:8px;border-radius:8px}
 
-/* GM 控制中心 */
-#gmPanel{max-height:94dvh;overflow:auto}
-#gmPanel .gmConsoleBar{display:flex;flex-wrap:wrap;gap:7px;padding:10px 14px;border-top:1px solid #d7b45b44}
-#gmPanel .gmConsoleGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0 14px 10px}
-#gmPanel .gmConsoleCard{min-width:0;margin:0 14px 10px;padding:10px;border:1px solid #b99bdf55;border-radius:13px;background:linear-gradient(145deg,#1d1538dd,#0b1025dd)}
-#gmPanel .gmConsoleGrid .gmConsoleCard{margin:0}
-#gmPanel .gmConsoleCard h3{margin:0 0 8px;color:#ffe7a0;font-size:14px}
-#gmPanel .gmList{display:flex;flex-direction:column;gap:7px;max-height:34vh;overflow:auto}
-#gmPanel .gmListItem{padding:8px;border-radius:9px;background:#ffffff0a;border:1px solid #ffffff15;font-size:12px;overflow-wrap:anywhere}
-#gmPanel .gmListItem strong{color:#fff0bd}
-#gmPanel .gmListItem .gmRow{margin-top:6px}
-#gmPanel .gmListItem button{font-size:11px;padding:5px 8px}
-#gmPanel .gmConsoleCard pre{white-space:pre-wrap;overflow:auto;max-height:180px;font:12px/1.5 ui-monospace,monospace;color:#e8dcff;overflow-wrap:anywhere}
 #gmPanel #gmProfileView{max-height:220px}
-@media(max-width:620px){#gmPanel .gmConsoleGrid{grid-template-columns:1fr;padding:0 8px 8px}#gmPanel .gmConsoleCard{margin:0 8px 8px}#gmPanel .gmConsoleBar{padding:8px}}
 
 #gmPanel .gmAnnounceInput{flex:1;min-width:150px;padding:7px 10px;border-radius:10px;border:1px solid #b99bdf77;background:#100d20;color:#fff}
+/* ===== GM 控制中心（左侧分类 + 右侧工作区，横屏优先） ===== */
+#gmPanel{width:min(980px,96vw);height:min(560px,88dvh);max-height:none;overflow:hidden;display:flex;flex-direction:column}
+#gmPanel .gmHead{gap:10px}
+#gmPanel .gmHead h2{color:#ffe7a0;text-shadow:0 0 8px #b987ff;white-space:nowrap}
+#gmPanel .gmHeadInfo{display:flex;gap:6px;margin-left:auto;margin-right:6px}
+#gmPanel .gmPill{padding:3px 10px;border-radius:999px;background:#ffffff14;border:1px solid #d7b45b55;font-size:12px;font-weight:700;white-space:nowrap}
+#gmPanel .gmPill b{color:#ffe48a}
+#gmPanel .gmPill.inv{background:#4b2588;color:#ffe58a}
+#gmPanel .gmLoginBox{padding:18px 20px;max-width:420px}
+#gmPanel .gmShell{flex:1 1 auto;min-height:0;display:flex}
+#gmPanel .gmNav{flex:0 0 126px;display:flex;flex-direction:column;gap:4px;padding:8px;border-right:1px solid var(--line);overflow-y:auto;background:#0000002e}
+#gmPanel .gmNav button{position:relative;display:flex;align-items:center;gap:7px;padding:9px 8px;border-radius:11px;background:transparent;color:var(--ink);font-size:13px;font-weight:700;text-align:left;white-space:nowrap}
+#gmPanel .gmNav button em{font-style:normal;font-size:15px}
+#gmPanel .gmNav button.on{background:linear-gradient(110deg,#3a2365,#2a1a50);box-shadow:inset 0 0 0 1px #d7b45b88;color:#fff2c0}
+#gmPanel .gmNav i{margin-left:auto;min-width:18px;padding:0 5px;border-radius:9px;background:#e8334f;color:#fff;font-size:11px;font-style:normal;font-weight:900;text-align:center;line-height:18px}
+#gmPanel .gmMain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+#gmPanel .gmPages{flex:1 1 auto;min-height:0;overflow-y:auto;padding:10px 14px}
+#gmPanel .gmPage[hidden]{display:none}
+#gmPanel .gmToast{margin:0;padding:6px 14px;border-top:1px solid var(--line);font-size:12px;color:#ffe8a0;min-height:18px}
+#gmPanel .gmRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+#gmPanel .gmRow>input{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:#ffffff14;color:#fff;font-size:15px}
+#gmPanel input[type=search],#gmPanel .gmToolbar input{flex:1;min-width:0;padding:7px 10px;border-radius:10px;border:1.5px solid var(--line);background:#ffffff14;color:#fff;font-size:14px}
+#gmPanel .gmSel,#gmPanel select{flex:1;min-width:0;width:100%;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:#2a1f55;color:#fff;font-size:14px}
+#gmPanel textarea{width:100%;box-sizing:border-box;padding:8px;border-radius:10px;border:1.5px solid var(--line);background:#ffffff10;color:#fff;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;resize:none}
+#gmPanel #gmLrc{height:min(250px,40dvh)}
+#gmPanel .gmAnnounce{height:84px;font:14px/1.45 -apple-system,sans-serif}
+#gmPanel .chip.danger{background:#8a2038}
+#gmPanel .gmToolbar{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+#gmPanel .gmCards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+#gmPanel .gmStat{padding:10px;border-radius:13px;border:1px solid #b99bdf55;background:linear-gradient(145deg,#1d1538dd,#0b1025dd)}
+#gmPanel .gmStat small{display:block;font-size:11px;opacity:.7}
+#gmPanel .gmStat b{display:block;margin-top:2px;font-size:22px;color:#ffe48a}
+#gmPanel .gmList{display:flex;flex-direction:column;gap:7px}
+#gmPanel .gmListItem{padding:8px 10px;border-radius:10px;background:#ffffff0a;border:1px solid #ffffff15;font-size:12px;overflow-wrap:anywhere;cursor:pointer}
+#gmPanel .gmListItem.sel{border-color:#ffd35c;background:#ffffff18}
+#gmPanel .gmListItem strong{color:#fff0bd;font-size:13px}
+#gmPanel .gmListItem .sub{opacity:.7;margin-top:2px}
+#gmPanel .gmTag{display:inline-block;margin-left:5px;padding:0 6px;border-radius:6px;background:#ffffff1f;font-size:10px;font-weight:800}
+#gmPanel .gmTag.warn{background:#a0602a}#gmPanel .gmTag.ok{background:#2b7a52}
+#gmPanel .gmSplit{display:flex;gap:10px;align-items:flex-start}
+#gmPanel .gmSplitList{flex:0 0 40%;max-height:calc(min(560px,88dvh) - 170px);overflow-y:auto}
+#gmPanel .gmDetail{flex:1;min-width:0;padding:10px;border-radius:12px;border:1px solid #b99bdf55;background:#0b102588;font-size:13px;overflow-wrap:anywhere}
+#gmPanel .gmDetail h4{margin:0 0 6px;color:#ffe7a0;font-size:15px}
+#gmPanel .gmDetail .ev{margin:4px 0;padding:6px 8px;border-radius:8px;background:#ffffff0d;font-size:12px}
+#gmPanel .gmEmpty{padding:30px 10px;text-align:center;opacity:.85}
+#gmPanel .gmPfHead{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+#gmPanel .gmAvatar{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#7a3fd0,#ff6fcf);font-size:22px;font-weight:900;color:#fff}
+#gmPanel .gmPfName{font-size:17px;font-weight:900;color:#fff0bd}
+#gmPanel .gmInfo{display:grid;grid-template-columns:84px 1fr;gap:5px 10px;padding:10px;border-radius:12px;background:#0b102588;border:1px solid #b99bdf44;font-size:13px}
+#gmPanel .gmInfo span{opacity:.65}#gmPanel .gmInfo div{overflow-wrap:anywhere;white-space:pre-wrap}
+#gmPanel .gmTwo{display:flex;gap:14px}
+#gmPanel .gmCol{flex:1;min-width:0}
+#gmPanel .gmPrev{margin:8px 0;padding:8px 10px;border-radius:12px;background:#0006;border:1px solid var(--line);text-align:center}
+#gmPanel #gmCur{font-size:18px;font-weight:800;color:#ffe48a;min-height:24px}
+#gmPanel .gmPrev small{display:block;font-size:11px;opacity:.7;margin-top:2px}
+#gmPanel h3 b{color:#ffe48a}
+#gmPanel pre{white-space:pre-wrap;overflow:auto;max-height:200px;margin:6px 0;padding:8px;border-radius:8px;background:#09071888;font:12px/1.5 ui-monospace,monospace;color:#ffe8a0;overflow-wrap:anywhere}
+#gmPanel .gmSeekRow{flex-wrap:nowrap}
+#gmPanel input[type=range]{flex:1;min-width:0;accent-color:#ff7ad1;height:24px;padding:0;background:none;border:0}
+#gmPanel #gmSeekT{min-width:78px;text-align:right;font-variant-numeric:tabular-nums}
+@media (max-height:480px){
+  #gmPanel{height:94dvh}
+  #gmPanel .gmNav{flex-basis:118px;padding:5px;gap:2px}
+  #gmPanel .gmNav button{padding:6px 7px;font-size:12px}
+  #gmPanel .gmPages{padding:8px 10px}
+  #gmPanel .chip{padding:4px 10px;font-size:12px}
+  #gmPanel .gmSplitList{max-height:calc(94dvh - 140px)}
+  #gmPanel .gmStat b{font-size:18px}
+  #gmPanel #gmLrc{height:min(170px,38dvh)}
+}
+@media (max-width:620px){
+  #gmPanel .gmShell{flex-direction:column}
+  #gmPanel .gmNav{flex:0 0 auto;flex-direction:row;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
+  #gmPanel .gmNav button{flex:0 0 auto}
+  #gmPanel .gmCards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #gmPanel .gmSplit,#gmPanel .gmTwo{flex-direction:column}
+  #gmPanel .gmSplitList{flex:none;width:100%;max-height:200px}
+}
+/* GM 入口：只有通过 GM 口令验证后才显示 */
+#gmFab{font-size:13px;font-weight:900;line-height:1;padding:7px 11px!important;border:1px solid #d7b45b!important;border-radius:999px;background:linear-gradient(135deg,#4b2588,#1d123d)!important;color:#ffe58a;text-shadow:0 0 7px #e6b84b;box-shadow:0 0 8px #9a62e866}

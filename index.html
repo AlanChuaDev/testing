@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#120e2b">
 <title>STAR PLAZA · 星光广场</title>
-<script>window.APP_V='20261103-gm2'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
+<script>window.APP_V='20261103-gm4'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
 </head>
 <body>
 <!-- login / create character -->
@@ -44,6 +44,7 @@
   <div id="topR">
     <button id="serverBtn">服务器 1 <b>▾</b></button>
     <button id="gear" aria-label="设置">⚙</button>
+    <button id="gmFab" type="button" aria-label="GM 控制中心" hidden>✦ GM</button>
     <div id="online">在线 <b id="onlineN">0</b></div>
   </div>
 
@@ -142,52 +143,166 @@
     <div id="blockList"></div>
     <h3>更新说明</h3>
     <div id="whatsNew" class="hint"></div>
-    <h3>GM</h3>
-    <button id="gmOpen" type="button" class="chip">🛠 GM 工具</button>
+    <div id="gmEntry" hidden><h3>GM</h3>
+    <button id="gmOpen" type="button" class="chip">🛠 GM 控制中心</button></div>
   </div>
 </section>
 
-<!-- GM：歌词 / 延迟校准（密钥在服务器验证） -->
+<!-- GM 控制中心：左侧分类导航 + 右侧独立工作区（所有操作都由服务器再次校验 GM 权限） -->
 <section class="sheet" id="gmPanel" hidden>
-  <header><h2>🛠 GM 工具 · 歌词校准</h2><button class="x" data-close>✕</button></header>
-  <div class="cols">
-    <div class="col" id="gmLogin">
-      <h3>GM 密钥</h3>
-      <div class="gmRow"><input id="gmKey" type="password" placeholder="输入 GM 密钥" autocomplete="off" autocapitalize="off"><button id="gmLoginBtn" class="chip" type="button">登录</button></div>
-      <p class="hint" id="gmLoginMsg"></p>
+  <header class="gmHead">
+    <h2>✦ GM 控制中心</h2>
+    <div class="gmHeadInfo" id="gmHeadInfo" hidden>
+      <span class="gmPill" id="gmStatePill">现身中</span>
+      <span class="gmPill">在线 <b id="gmOnlineCount">0</b></span>
     </div>
-    <div class="col" id="gmEdit" hidden>
-      <select id="gmSong"></select>
-      <h3>歌词延迟：<b id="gmOffVal">0 ms</b> <span class="hint">（＋ 更晚出现，－ 更早出现）</span></h3>
-      <div class="gmRow"><button class="chip" data-off="-100" type="button">−100</button><button class="chip" data-off="-10" type="button">−10</button><button class="chip" data-off="10" type="button">+10</button><button class="chip" data-off="100" type="button">+100</button><button id="gmOffReset" class="chip" type="button">清零</button></div>
-      <div class="gmPrev"><div id="gmCur">（点「试听」开始播放）</div><small id="gmNext"></small><small id="gmTime"></small></div>
-      <div class="gmRow"><button id="gmPlay" class="chip" type="button">▶ 试听</button><button id="gmRestart" class="chip" type="button">⏮ 从头</button><button id="gmPause" class="chip" type="button">⏸ 暂停</button><button id="gmBack" class="chip" type="button">⏪ 5秒</button><button id="gmFwd" class="chip" type="button">5秒 ⏩</button></div>
-      <div class="gmRow gmSeekRow"><input id="gmSeek" type="range" min="0" max="300" step="0.1" value="0"><span id="gmSeekT" class="hint">0:00 / 0:00</span></div>
-      <div class="gmRow"><span class="hint">当前句时间</span><button class="chip" data-line="-0.5" type="button">−0.5s</button><button class="chip" data-line="-0.1" type="button">−0.1s</button><button class="chip" data-line="0.1" type="button">+0.1s</button><button class="chip" data-line="0.5" type="button">+0.5s</button></div>
-    </div>
-    <div class="col" id="gmEdit2" hidden>
-      <h3>歌词文本（LRC，改完自动预览）</h3>
-      <textarea id="gmLrc" spellcheck="false" autocomplete="off"></textarea>
-      <div class="gmRow"><button id="gmReset" class="chip" type="button">恢复原版</button><button id="gmSave" class="chip on" type="button">💾 保存并全服更新</button></div>
-      <p class="hint" id="gmMsg"></p>
-    </div>
+    <button class="x" data-close>✕</button>
+  </header>
+
+  <div id="gmLogin" class="gmLoginBox">
+    <h3>GM 密钥</h3>
+    <div class="gmRow"><input id="gmKey" type="password" placeholder="输入 GM 密钥" autocomplete="off" autocapitalize="off"><button id="gmLoginBtn" class="chip on" type="button">登录</button></div>
+    <p class="hint" id="gmLoginMsg"></p>
   </div>
-  <div id="gmConsole" hidden>
-    <div class="gmConsoleBar">
-      <button id="gmRefreshPlayers" class="chip" type="button">👥 刷新在线玩家</button>
-      <button id="gmRefreshReports" class="chip" type="button">🚩 刷新举报</button>
-      <button id="gmInvisible" class="chip" type="button">👁 开启隐身</button>
-      <button id="gmRefreshAudit" class="chip" type="button">📋 操作日志</button>
-      <input id="gmAnnouncementText" class="gmAnnounceInput" maxlength="120" placeholder="输入全服公告（最多120字）">
-      <button id="gmAnnouncementSend" class="chip" type="button">📣 发布公告</button>
-    </div>
-    <p class="hint" id="gmConsoleMsg">GM已登录。在线玩家和举报列表可手动刷新。</p>
-    <div class="gmConsoleGrid">
-      <div class="gmConsoleCard"><h3>在线玩家 <span id="gmOnlineCount">0</span></h3><div id="gmPlayers" class="gmList">点击刷新查看在线玩家。</div></div>
-      <div class="gmConsoleCard"><h3>举报处理</h3><div id="gmReportsList" class="gmList">点击刷新查看举报。</div></div>
-    </div>
-    <div class="gmConsoleCard gmProfileCard"><h3>玩家资料（GM查看）</h3><pre id="gmProfileView">选择在线玩家查看资料。</pre></div>
-    <div class="gmConsoleCard"><h3>GM操作日志</h3><pre id="gmAdminLog">暂无管理记录</pre></div>
+
+  <div id="gmShell" class="gmShell" hidden>
+    <nav class="gmNav" id="gmNav">
+      <button type="button" data-page="overview" class="on"><em>📊</em><span>总览</span></button>
+      <button type="button" data-page="reports"><em>🚩</em><span>举报中心</span><i id="gmNavBadge" hidden>0</i></button>
+      <button type="button" data-page="players"><em>👥</em><span>在线玩家</span></button>
+      <button type="button" data-page="profile"><em>🪪</em><span>玩家资料</span></button>
+      <button type="button" data-page="teleport"><em>🌀</em><span>传送管理</span></button>
+      <button type="button" data-page="music"><em>🎵</em><span>音乐调试</span></button>
+      <button type="button" data-page="server"><em>📣</em><span>全服管理</span></button>
+      <button type="button" data-page="settings"><em>⚙</em><span>GM设置</span></button>
+    </nav>
+
+    <main class="gmMain">
+      <div class="gmPages">
+
+        <!-- 总览 -->
+        <div class="gmPage" id="gmPage-overview">
+          <div class="gmCards">
+            <div class="gmStat"><small>在线人数</small><b id="gmStOnline">–</b></div>
+            <div class="gmStat"><small>待处理举报</small><b id="gmStPending">–</b></div>
+            <div class="gmStat"><small>禁言中</small><b id="gmStMuted">–</b></div>
+            <div class="gmStat"><small>GM 状态</small><b id="gmStState">–</b></div>
+          </div>
+          <h3>快捷操作</h3>
+          <div class="gmRow">
+            <button class="chip" type="button" data-goto="reports">🚩 处理举报</button>
+            <button class="chip" type="button" data-goto="players">👥 在线玩家</button>
+            <button class="chip" type="button" data-goto="server">📣 发布公告</button>
+            <button class="chip" type="button" id="gmQuickInvis">👁 切换隐身</button>
+            <button class="chip" type="button" id="gmRefreshOverview">↻ 刷新</button>
+          </div>
+          <h3>房间分布 <span class="hint" id="gmUptime"></span></h3>
+          <div id="gmRoomList" class="gmList"></div>
+        </div>
+
+        <!-- 举报中心：左列表 / 右详情 -->
+        <div class="gmPage" id="gmPage-reports" hidden>
+          <div class="gmToolbar">
+            <button class="chip on" type="button" data-rf="pending">待处理</button>
+            <button class="chip" type="button" data-rf="all">全部</button>
+            <button class="chip" type="button" id="gmRefreshReports">↻ 刷新</button>
+          </div>
+          <div class="gmSplit">
+            <div id="gmReportsList" class="gmList gmSplitList"></div>
+            <div id="gmReportDetail" class="gmDetail"><p class="hint">从左边选一条举报，这里会显示详情和处理按钮。</p></div>
+          </div>
+        </div>
+
+        <!-- 在线玩家 -->
+        <div class="gmPage" id="gmPage-players" hidden>
+          <div class="gmToolbar">
+            <input id="gmPlayerSearch" type="search" placeholder="搜索昵称 / 编号 / 场景" autocomplete="off">
+            <button class="chip" type="button" id="gmRefreshPlayers">↻ 刷新</button>
+          </div>
+          <div id="gmPlayers" class="gmList"></div>
+        </div>
+
+        <!-- 玩家资料（独立详情页） -->
+        <div class="gmPage" id="gmPage-profile" hidden>
+          <div id="gmProfileEmpty" class="gmEmpty"><p>还没有选中玩家</p><button class="chip" type="button" data-goto="players">去「在线玩家」选择</button></div>
+          <div id="gmProfileBox" hidden>
+            <div class="gmPfHead"><div class="gmAvatar" id="gmPfAvatar">?</div><div><div class="gmPfName" id="gmPfName"></div><div class="hint" id="gmPfScene"></div></div></div>
+                        <div class="gmRow">
+              <button class="chip" type="button" data-act="mute" data-min="15">禁言 15 分</button>
+              <button class="chip" type="button" data-act="mute" data-min="60">禁言 1 小时</button>
+              <button class="chip" type="button" data-act="mute" data-min="1440">禁言 24 小时</button>
+              <button class="chip" type="button" data-act="unmute">解除禁言</button>
+              <button class="chip danger" type="button" data-act="kick">踢出房间</button>
+              <button class="chip" type="button" data-goto="teleport">🌀 去传送</button>
+            </div>
+            <div id="gmPfInfo" class="gmInfo"></div>
+          </div>
+        </div>
+
+        <!-- 传送管理 -->
+        <div class="gmPage" id="gmPage-teleport" hidden>
+          <div id="gmTpEmpty" class="gmEmpty"><p>先选一位在线玩家，才能传送到 TA 身边</p><button class="chip" type="button" data-goto="players">去「在线玩家」选择</button></div>
+          <div id="gmTpBox" hidden>
+            <div class="gmDetail"><div class="gmPfName" id="gmTpName"></div><div class="hint" id="gmTpScene"></div></div>
+            <div class="gmRow"><button class="chip on" type="button" id="gmTpBtn">🌀 传送到身边</button></div>
+            <p class="hint">玩家在别的场景时，会先切换到那张地图再传送。</p>
+          </div>
+        </div>
+
+        <!-- 音乐调试 -->
+        <div class="gmPage" id="gmPage-music" hidden>
+          <div class="gmTwo">
+            <div class="gmCol">
+              <select id="gmSong"></select>
+              <h3>歌词延迟：<b id="gmOffVal">0 ms</b> <span class="hint">（＋ 更晚出现，－ 更早出现）</span></h3>
+              <div class="gmRow"><button class="chip" data-off="-100" type="button">−100</button><button class="chip" data-off="-10" type="button">−10</button><button class="chip" data-off="10" type="button">+10</button><button class="chip" data-off="100" type="button">+100</button><button id="gmOffReset" class="chip" type="button">清零</button></div>
+              <div class="gmPrev"><div id="gmCur">（点「试听」开始播放）</div><small id="gmNext"></small><small id="gmTime"></small></div>
+              <div class="gmRow"><button id="gmPlay" class="chip" type="button">▶ 试听</button><button id="gmRestart" class="chip" type="button">⏮ 从头</button><button id="gmPause" class="chip" type="button">⏸ 暂停</button><button id="gmBack" class="chip" type="button">⏪ 5秒</button><button id="gmFwd" class="chip" type="button">5秒 ⏩</button></div>
+              <div class="gmRow gmSeekRow"><input id="gmSeek" type="range" min="0" max="300" step="0.1" value="0"><span id="gmSeekT" class="hint">0:00 / 0:00</span></div>
+              <div class="gmRow"><span class="hint">当前句时间</span><button class="chip" data-line="-0.5" type="button">−0.5s</button><button class="chip" data-line="-0.1" type="button">−0.1s</button><button class="chip" data-line="0.1" type="button">+0.1s</button><button class="chip" data-line="0.5" type="button">+0.5s</button></div>
+            </div>
+            <div class="gmCol">
+              <h3>歌词文本（LRC，改完自动预览）</h3>
+              <textarea id="gmLrc" spellcheck="false" autocomplete="off"></textarea>
+              <div class="gmRow"><button id="gmReset" class="chip" type="button">恢复原版</button><button id="gmSave" class="chip on" type="button">💾 保存并全服更新</button></div>
+              <p class="hint" id="gmMsg"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 全服管理 -->
+        <div class="gmPage" id="gmPage-server" hidden>
+          <h3>全服公告 <span class="hint" id="gmAnnCount">0/120</span></h3>
+          <textarea id="gmAnnouncementText" class="gmAnnounce" maxlength="120" placeholder="输入全服公告（最多 120 字）"></textarea>
+          <div class="gmRow"><button id="gmAnnouncementSend" class="chip on" type="button">📣 发布公告</button></div>
+          <h3>处罚操作</h3>
+          <div class="gmRow"><select id="gmSvPlayer" class="gmSel"></select><button class="chip" type="button" id="gmSvRefresh">↻</button></div>
+          <div class="gmRow">
+            <button class="chip" type="button" data-svact="mute" data-min="15">禁言 15 分</button>
+            <button class="chip" type="button" data-svact="mute" data-min="60">禁言 1 小时</button>
+            <button class="chip" type="button" data-svact="mute" data-min="1440">禁言 24 小时</button>
+            <button class="chip" type="button" data-svact="unmute">解除禁言</button>
+            <button class="chip danger" type="button" data-svact="kick">踢出房间</button>
+          </div>
+          <h3>禁言中的玩家</h3>
+          <div id="gmMutedList" class="gmList"></div>
+        </div>
+
+        <!-- GM 设置 -->
+        <div class="gmPage" id="gmPage-settings" hidden>
+          <h3>可见状态</h3>
+          <div class="gmRow"><button id="gmInvisible" class="chip" type="button">👁 开启隐身</button></div>
+          <p class="hint">隐身后普通玩家看不到你，聊天名字也会显示成「玩家」。</p>
+          <h3>GM 操作日志</h3>
+          <div class="gmRow"><button id="gmRefreshAudit" class="chip" type="button">↻ 刷新日志</button></div>
+          <pre id="gmAdminLog">暂无管理记录</pre>
+          <h3>账号</h3>
+          <div class="gmRow"><button id="gmLogout" class="chip danger" type="button">退出 GM 模式</button></div>
+        </div>
+
+      </div>
+      <p class="gmToast" id="gmConsoleMsg">GM 已登录。</p>
+    </main>
   </div>
 </section>
 

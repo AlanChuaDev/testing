@@ -488,6 +488,33 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    // GM 总览：在线人数 / 待处理举报 / 禁言人数 / 房间分布（只有 GM 连接能拿到）
+    if (m.type === "gm_overview") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const nowO = Date.now();
+      const online = [...byPid.values()].filter((c) => !c.closed).length;
+      const pending = reportLog.filter((r) => !r.status).length;
+      let muted = 0; for (const t of mutes.values()) if (t > nowO) muted++;
+      const roomList = [...rooms.entries()].map(([name, pl]) => ({ name, n: pl.size })).sort((a, b) => b.n - a.n).slice(0, 20);
+      return send(ws, { type: "gmOverview", online, pending, muted, invisible: !!ws.gmInvisible, uptime: Math.floor(process.uptime()), rooms: roomList });
+    }
+
+    // 退出 GM 模式：服务器收回权限、取消隐身、去掉 GM 徽章
+    if (m.type === "gm_logout") {
+      if (!ws.isGM) return send(ws, { type: "gmLoggedOut" });
+      const wasInv = !!ws.gmInvisible, roomL = ws.room || null;
+      const recL = { at: new Date().toISOString(), by: ws.name, action: "gm_logout", target: ws.name, room: roomL };
+      gmActionLog.push(recL); if (gmActionLog.length > 200) gmActionLog.shift();
+      ws.isGM = false; ws.gmInvisible = false;
+      if (ws.room) {
+        const ent = rooms.get(ws.room)?.get(ws.playerId);
+        if (ent) { ent.info.isGM = false; ws.info = ent.info; }
+        sendToRoom(ws.room, { type: "gmBadge", playerId: ws.playerId, isGM: false });
+        if (wasInv) sendToRoom(ws.room, { type: "playerJoined", playerId: ws.playerId, info: ws.info, state: ent ? ent.state : null }, ws);
+      }
+      return send(ws, { type: "gmLoggedOut" });
+    }
+
     if (m.type === "gm_action_log") {
       if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
       return send(ws, { type: "gmActionLog", list: gmActionLog.slice(-50) });
@@ -514,7 +541,7 @@ wss.on("connection", (ws) => {
 
     if (m.type === "gm_players") {
       if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
-      const list = [...byPid.values()].filter(c => !c.closed).map(c => ({ pid:c.playerId, pub:c.pub, name:c.name, room:c.room, isGM:!!c.isGM, invisible:!!c.gmInvisible, state:c.room ? (rooms.get(c.room)?.get(c.playerId)?.state || null) : null }));
+      const list = [...byPid.values()].filter(c => !c.closed).map(c => ({ pid:c.playerId, pub:c.pub, name:c.name, room:c.room, isGM:!!c.isGM, invisible:!!c.gmInvisible, muted:((mutes.get(c.pub)||0)>Date.now()?(mutes.get(c.pub)-Date.now()):0), state:c.room ? (rooms.get(c.room)?.get(c.playerId)?.state || null) : null }));
       return send(ws, { type:"gmPlayers", list, n:list.length, invisible:!!ws.gmInvisible });
     }
 
