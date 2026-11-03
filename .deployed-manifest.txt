@@ -5,11 +5,14 @@ assets/songs/cishengbuhuan.mp3
 assets/songs/damian.mp3
 assets/songs/daoshu.mp3
 assets/songs/guchu.mp3
+assets/songs/gushen.mp3
 assets/songs/kebukeyi.mp3
 assets/songs/ruyuan.mp3
+assets/songs/shuohaodexinfune.mp3
 assets/songs/wumeizijiang.mp3
 assets/songs/xiaoxingyun.mp3
 assets/songs/yidileideshijian.mp3
+assets/songs/zuiluo.mp3
 css/style.css
 index.html
 js/auth.js
