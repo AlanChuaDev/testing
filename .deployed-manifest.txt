@@ -1,6 +1,8 @@
 CHANGELOG.md
 README.md
 assets/girl.glb
+assets/songs/guchu.mp3
+assets/songs/xiaoxingyun.mp3
 css/style.css
 index.html
 js/auth.js
