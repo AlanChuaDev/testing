@@ -100,6 +100,11 @@ function setInvUI(on) {
   const pill = $('gmStatePill'); pill.textContent = on ? '隐身中' : '现身中'; pill.classList.toggle('inv', !!on);
   $('gmStState').textContent = on ? '隐身' : '现身';
 }
+/* 飞行加速（穿墙）：开关 + 倍数；真正的移动逻辑在 game.js 的 moveEnt / FLY */
+function setFly(on) {
+  const F = window.GMFly; if (!F) return; F.on = !!on;
+  $('gmFly').textContent = on ? '🚀 关闭飞行加速' : '🚀 开启飞行加速'; $('flyFab').classList.toggle('on', !!on);
+}
 function updateBadge(n) { const b = $('gmNavBadge'); b.hidden = !n; b.textContent = n > 99 ? '99+' : String(n); }
 
 /* ---------- 总览 ---------- */
@@ -239,7 +244,7 @@ function loggedOut(closePanel) {
   isGM = false; window.GM.isGM = false; setInvUI(false); stopPreview();
   if (window.__game && __game.me) __game.me.isGM = false;
   const b = $('gmOpen'); b.classList.remove('gmAdminBtn');
-  $('gmEntry').hidden = true; $('gmFab').hidden = true;      // 退出后，普通界面里再也看不到任何 GM 入口
+  $('gmEntry').hidden = true; $('gmFab').hidden = true; $('flyFab').hidden = true; setFly(false);      // 退出后，普通界面里再也看不到任何 GM 入口
   if (closePanel === true) $('gmPanel').hidden = true;
   players = []; reports = []; sel = null; selPid = null; selReport = -1; updateBadge(0);
   enter(false);
@@ -248,6 +253,8 @@ function loggedOut(closePanel) {
 function bind() {
   $('gmOpen').onclick = open;
   $('gmFab').onclick = open;
+  $('gmFly').onclick = $('flyFab').onclick = () => { if (!window.GM.isGM || !window.GMFly) return; setFly(!window.GMFly.on); if (window.__game && __game.api) __game.api.toast(window.GMFly.on ? '🚀 飞行加速已开启（' + window.GMFly.mul + ' 倍，穿墙）' : '飞行加速已关闭', 1600); };
+  $('gmFlySpeed').onchange = () => { if (window.GMFly) window.GMFly.mul = +$('gmFlySpeed').value || 4; };
   /* 隐藏入口：在「设置」里连点标题 7 次才会出现 GM 密钥输入框；普通玩家界面上没有任何 GM 字样 */
   /* 监听整个设置面板的标题栏（捕获阶段），手机上点到标题文字、空白处都算；点关闭按钮不算 */
   let taps = 0, tapT = 0;
@@ -318,7 +325,7 @@ function bind() {
   Net.on('gmOk', () => {
     isGM = true; window.GM.isGM = true; if (window.__game && __game.me) __game.me.isGM = true;
     $('gmKey').value = ''; loginMsg('');
-    $('gmOpen').classList.add('gmAdminBtn'); $('gmEntry').hidden = false; $('gmFab').hidden = false;   // 验证通过后才出现入口
+    $('gmOpen').classList.add('gmAdminBtn'); $('gmEntry').hidden = false; $('gmFab').hidden = false; $('flyFab').hidden = false;   // 验证通过后才出现入口
     if (!$('gmPanel').hidden) enter(true);
   });
   Net.on('gmFail', m => loginMsg(m.message || '登录失败'));
