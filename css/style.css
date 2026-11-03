@@ -354,3 +354,12 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 #gmFab{font-size:13px;font-weight:900;line-height:1;padding:7px 11px!important;border:1px solid #d7b45b!important;border-radius:999px;background:linear-gradient(135deg,#4b2588,#1d123d)!important;color:#ffe58a;text-shadow:0 0 7px #e6b84b;box-shadow:0 0 8px #9a62e866}
 /* GM 按钮：放到「服务器」按钮的左边（脱离网格），不再挡住下面的「在线」和「组队」 */
 #topR #gmFab{position:absolute;right:calc(100% + 6px);top:0;white-space:nowrap}
+/* 登录门槛：ID + 密码 + Google */
+.lgTabs{display:flex;gap:6px;margin:4px 0 8px}
+.lgTabs button{flex:1;padding:8px 0;border-radius:10px;background:#ffffff14;color:#fff;font-weight:800}
+.lgTabs button.on{background:linear-gradient(#ff7ad1,#c63aa6)}
+.lgOr{display:flex;align-items:center;gap:10px;margin:12px 0 8px;font-size:12px;opacity:.7}
+.lgOr::before,.lgOr::after{content:"";flex:1;height:1px;background:var(--line)}
+.lgGoogle{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:10px 14px;border-radius:12px;background:#fff;color:#3c4043;font-size:15px;font-weight:800;border:0}
+.lgGoogle:active{filter:brightness(.92)}
+

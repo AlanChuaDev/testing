@@ -1,5 +1,17 @@
 # 更新记录
 
+## 登录门槛（gm9）
+- 打开游戏先出现登录页：ID + 密码（登录 / 注册），下面有「使用 Google 登录」按钮；必须登录才能进入游戏。
+- 这台设备原来的游客资料：注册 / Google 登录时会直接变成该账号，好友和资料保留。
+- ID 账号在 Firebase 里是「ID@starplaza.app」，不是真实邮箱，不能用邮件找回密码；想要可找回的账号请用 Google。
+- 退出账号后会刷新页面回到登录页。
+- ⚠ Firebase 控制台要启用：Authentication → 登录方式 → 邮箱/密码 + Google；授权网域里加 alanchuadev.github.io。
+
+## Google 登录（gm8）
+- 「我 → 账号」里新增「🔵 用 Google 登录 / 绑定」：游客账号会直接绑定到 Google 账号，好友和资料保留；如果这个 Google 已经有游戏账号，会确认后切换过去。
+- ⚠ 使用前要在 Firebase 控制台：Authentication → 登录方式 → 启用 Google；并在「设置 → 已获授权的网域」里加入 alanchuadev.github.io。
+- 网页版可用；Android APK（Capacitor）里的弹窗登录通常会被拦，需要另外接原生登录。
+
 ## GM 按钮位置修复（gm7）
 - 登录 GM 后右上角的「✦ GM」按钮移到「服务器」按钮的左边，不再盖住「在线」，也不挤压下面的「组队」。
 

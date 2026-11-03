@@ -66,13 +66,21 @@ function accountBox() {
   const email = h('input', { type: 'email', placeholder: '邮箱', autocomplete: 'email' }), pw = h('input', { type: 'password', placeholder: '密码（至少 6 位）', autocomplete: 'new-password' });
   const run = async (fn, ok) => { try { await fn(); if (ok) toast(ok, 2200); } catch (e) { toast(A.err(e), 3200); } };
   if (A.anon) {
-    box.append(h('p', { class: 'hint', text: '现在是「游客账号」：只保存在这台设备上，清除浏览器数据或换手机就找不回来了。绑定邮箱后好友和资料都会保留，换设备用邮箱登录即可。' }), email, pw,
+    const gLogin = async () => {
+      try {
+        const r = await A.googleLogin();
+        if (r && r.cred) { if (confirm('这个 Google 账号已经有游戏资料。登录后会切换成那个账号，这台设备当前的游客资料不会合并。继续？')) { await A.googleSwitch(r.cred); toast('登录成功', 2200); } }
+        else toast(r && r.linked ? '已用 Google 绑定 ✅' : '登录成功', 2200);
+      } catch (e) { toast(A.err(e), 3200); }
+    };
+    box.append(h('p', { class: 'hint', text: '现在是「游客账号」：只保存在这台设备上，清除浏览器数据或换手机就找不回来了。用 Google 登录（或绑定邮箱）后好友和资料都会保留，换设备登录同一个账号即可。' }),
+      h('div', { class: 'pfRow' }, h('button', { class: 'chip on', type: 'button', text: '🔵 用 Google 登录 / 绑定', onclick: gLogin })), email, pw,
       h('div', { class: 'pfRow' },
         h('button', { class: 'chip on', type: 'button', text: '绑定邮箱', onclick: () => run(() => A.linkEmail(email.value.trim(), pw.value), '已绑定邮箱 ✅') }),
         h('button', { class: 'chip', type: 'button', text: '登录已有账号', onclick: () => { if (confirm('登录后会切换成那个账号，这台设备当前的游客资料不会合并。继续？')) run(() => A.signIn(email.value.trim(), pw.value), '登录成功'); } }),
         h('button', { class: 'chip', type: 'button', text: '忘记密码', onclick: () => run(() => A.resetPassword(email.value.trim()), '重置邮件已发送（也看看垃圾箱）') })));
   } else {
-    box.append(h('p', { text: '已绑定：' + A.email }), h('button', { class: 'chip', type: 'button', text: '退出账号', onclick: () => { if (confirm('退出后这台设备会变成新的游客账号，要用邮箱登录才能回到现在的账号。确定？')) run(() => A.signOut()); } }));
+    box.append(h('p', { text: '已登录：' + A.label }), h('button', { class: 'chip', type: 'button', text: '退出账号', onclick: () => { if (confirm('退出后需要重新登录才能进入游戏。确定？')) run(() => A.signOut()); } }));
   }
   return box;
 }

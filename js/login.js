@@ -27,6 +27,7 @@ function renderOutfit() {
   $('lgSkirt').classList.toggle('on', outfit.bottomType === 'skirt'); $('lgShorts').classList.toggle('on', outfit.bottomType !== 'skirt');
 }
 function show(mode) {
+  $('lgAuth').hidden = mode !== 'auth';
   $('lgWelcome').hidden = mode !== 'welcome'; $('lgCreate').hidden = mode !== 'create';
   if (mode === 'welcome') $('lgName').textContent = profile.name;
   if (mode === 'create') { $('lgInput').value = profile ? profile.name : ''; renderOutfit(); }
@@ -53,5 +54,43 @@ $('lgGo').onclick = () => {
 };
 $('lgEnter').onclick = enter;
 $('lgNew').onclick = () => show('create');
-show(profile ? 'welcome' : 'create');
+
+/* ---------- 登录门槛：必须用 ID+密码 或 Google 登录，才能进入游戏 ---------- */
+let authOK = false, authMode = 'in', authBusy = false;
+const afterAuth = () => show(profile ? 'welcome' : 'create');
+const authErr = t => { $('lgAuthErr').textContent = t || ''; };
+function setAuthMode(m) {
+  authMode = m; authErr('');
+  $('lgTabIn').classList.toggle('on', m === 'in'); $('lgTabUp').classList.toggle('on', m === 'up');
+  $('lgPw2Row').hidden = m !== 'up'; $('lgAuthGo').textContent = m === 'up' ? '注册并登录' : '登录';
+  $('lgPw').autocomplete = m === 'up' ? 'new-password' : 'current-password';
+}
+async function authRun(fn) {
+  if (authBusy) return; authBusy = true; authErr('');
+  try { await fn(); afterAuth(); } catch (e) { authErr(window.Auth ? Auth.err(e) : String(e)); }
+  authBusy = false;
+}
+$('lgTabIn').onclick = () => setAuthMode('in');
+$('lgTabUp').onclick = () => setAuthMode('up');
+$('lgAuthGo').onclick = () => {
+  if (!authOK) return location.reload();                       // 账号服务没连上：点一下重新加载
+  authRun(async () => {
+    const id = $('lgId').value, pw = $('lgPw').value;
+    if (authMode === 'up') { if (pw !== $('lgPw2').value) throw { code: 'auth/password-mismatch' }; await Auth.idRegister(id, pw); }
+    else await Auth.idLogin(id, pw);
+  });
+};
+$('lgGoogle').onclick = () => {
+  if (!authOK) return location.reload();
+  authRun(async () => { const r = await Auth.googleLogin(); if (r && r.cred) await Auth.googleSwitch(r.cred); });   // 这个 Google 已有账号就直接切过去
+};
+['lgId', 'lgPw', 'lgPw2'].forEach(id => $(id).addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') $('lgAuthGo').click(); }));
+(async function start() {
+  authErr('');
+  const ok = window.Auth ? await Promise.race([Auth.init(), new Promise(r => setTimeout(() => r(false), 10000))]) : false;
+  authOK = !!ok;
+  if (ok && !Auth.anon) return afterAuth();                    // 已经登录过：直接进
+  show('auth'); setAuthMode('in');
+  if (!ok) { authErr('账号服务连不上（网络不通或 Firebase 被拦截）。必须登录才能进入游戏，请检查网络后点「登录」重试。'); $('lgAuthGo').textContent = '重试'; }
+})();
 })();

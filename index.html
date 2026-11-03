@@ -5,13 +5,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#120e2b">
 <title>STAR PLAZA · 星光广场</title>
-<script>window.APP_V='20261103-gm6'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
+<script>window.APP_V='20261103-gm9'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'">');</script>
 </head>
 <body>
 <!-- login / create character -->
 <div id="login">
   <div class="lgBox">
     <h1>STAR PLAZA · 星光广场</h1>
+    <div id="lgAuth" hidden>
+      <div class="lgTabs"><button id="lgTabIn" class="on" type="button">登录</button><button id="lgTabUp" type="button">注册</button></div>
+      <label class="lgRow">ID<input id="lgId" maxlength="20" placeholder="英文 / 数字 / 下划线，3–20 位" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label class="lgRow">密码<input id="lgPw" type="password" placeholder="至少 6 位" autocomplete="current-password"></label>
+      <label class="lgRow" id="lgPw2Row" hidden>确认<input id="lgPw2" type="password" placeholder="再输入一次密码" autocomplete="new-password"></label>
+      <p class="lgErr" id="lgAuthErr"></p>
+      <div class="lgBtns"><button id="lgAuthGo" class="lgPrimary" type="button">登录</button></div>
+      <div class="lgOr"><span>或</span></div>
+      <button id="lgGoogle" class="lgGoogle" type="button"><svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.100 0 24s.9 7.600 2.600 10.800l7.900-6.100z"/><path fill="#34A853" d="M24 48c6.500 0 11.900-2.100 15.900-5.800l-7.500-5.800c-2.100 1.400-4.800 2.300-8.400 2.300-6.300 0-11.600-4.100-13.500-9.800l-7.900 6.100C6.500 42.600 14.600 48 24 48z"/></svg><span>使用 Google 登录</span></button>
+    </div>
     <div id="lgWelcome" hidden>
       <p class="lgHi">欢迎回来，<b id="lgName"></b></p>
       <div class="lgBtns"><button id="lgEnter" class="lgPrimary" type="button">进入游戏</button><button id="lgNew" type="button">修改角色</button></div>
