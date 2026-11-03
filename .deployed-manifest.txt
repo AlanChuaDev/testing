@@ -4,7 +4,9 @@ assets/girl.glb
 assets/songs/cishengbuhuan.mp3
 assets/songs/guchu.mp3
 assets/songs/ruyuan.mp3
+assets/songs/wumeizijiang.mp3
 assets/songs/xiaoxingyun.mp3
+assets/songs/yidileideshijian.mp3
 css/style.css
 index.html
 js/auth.js
