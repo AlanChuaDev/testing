@@ -26,7 +26,7 @@ function makePlazaV3(R, T, styleName) {
   const ST = STYLES[styleName] || STYLES.cozy, A = hex(ST.accent), A2 = hex(ST.accent2);
   const S = { batches: [], obstacles: [], portals: [], hotspots: [], spots: [], lamps: [], seats: [], style: ST };
   const bbOf = (mb) => { const a = [1e9, 1e9, 1e9], b = [-1e9, -1e9, -1e9]; for (let k = 0; k < mb.v.length; k += 11) for (let j = 0; j < 3; j++) { const v = mb.v[k + j]; if (v < a[j]) a[j] = v; if (v > b[j]) b[j] = v; } return [a, b]; };
-  const add = (mb, mat) => { if (mb.i.length) { if (SHX || SHZ) for (let k = 0; k < mb.v.length; k += 11) { mb.v[k] += SHX; mb.v[k + 2] += SHZ; } const b = R.batch(mb, mat); b.bb = bbOf(mb); S.batches.push(b); } return mb; };
+  const add = (mb, mat) => { if (mb.i.length) { const b = R.batch(mb, mat); b.bb = bbOf(mb); S.batches.push(b); } return mb; };
   /* occluders: things that can stand between camera and player fade to 10% (S.updateOcclusion) */
   S.occluders = [];
   const occ = (fn) => { const n0 = S.batches.length; fn(); const bs = S.batches.slice(n0).filter(b => b.bb && b.mat.mode === 0); if (!bs.length) return; const a = [1e9, 1e9, 1e9], c = [-1e9, -1e9, -1e9]; bs.forEach(b => { for (let j = 0; j < 3; j++) { a[j] = Math.min(a[j], b.bb[0][j]); c[j] = Math.max(c[j], b.bb[1][j]); } }); S.occluders.push({ bs, a, b: c, f: 1 }); };
@@ -44,38 +44,25 @@ function makePlazaV3(R, T, styleName) {
   const halo = (mb, x, y, z, s, col) => { const c = Math.cos(PITCH), sn = Math.sin(PITCH); const P = (a, b) => [x + a * s, y + c * b * s, z - sn * b * s]; mb.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), [0, 1, 0], [0, 0, 1, 1], col); };
   const pool = (mb, x, z, r, col, y) => mb.floor(x - r, z - r, x + r, z + r, y == null ? .03 : y, col);
   const night = k => e => e.night * k, nightPlus = (a, b) => e => a + e.night * b;
-  /* ===== 广场整体放大 K 倍：只拉开布局间距，物体本身大小不变 ===== */
-  const K = 1.5, ZC = 4, ZB = ZC + (-13.5 - ZC) * K;
-  const ZP = z => ZC + (z - ZC) * K;
-  let SHX = 0, SHZ = 0;
-  const withShift = (dx, dz, fn) => {
-    const n = [S.obstacles.length, S.portals.length, S.hotspots.length, S.seats.length, S.lamps.length]; SHX = dx; SHZ = dz; fn(); SHX = 0; SHZ = 0;
-    for (let i = n[0]; i < S.obstacles.length; i++) { const o = S.obstacles[i]; o.x0 += dx; o.x1 += dx; o.z0 += dz; o.z1 += dz; }
-    for (let i = n[1]; i < S.portals.length; i++) { const o = S.portals[i]; o.x += dx; o.z += dz; }
-    for (let i = n[2]; i < S.hotspots.length; i++) { const o = S.hotspots[i]; o.x += dx; o.z += dz; }
-    for (let i = n[3]; i < S.seats.length; i++) { const o = S.seats[i]; o.x += dx; o.z += dz; o.ap[0] += dx; o.ap[1] += dz; o.hot.x = o.ap[0]; o.hot.z = o.ap[1]; }
-    for (let i = n[4]; i < S.lamps.length; i++) { const o = S.lamps[i]; o[0] += dx; o[1] += dz; }
-  };
-  const at = (x, z, fn) => withShift((K - 1) * x, (K - 1) * (z - ZC), fn);
-  const CX = 0, CZ = ZP(9);
+  const CX = 0, CZ = 9;
 
   /* ---------- shape ---------- */
-  const ctrl0 = [[29, -13.5], [29.8, -5], [28.8, 4], [25.2, 12.5], [18, 18.6], [8, 22], [0, 22.8], [-8, 22], [-18, 18.6], [-25.2, 12.5], [-28.8, 4], [-29.8, -5], [-29, -13.5]], ctrl = ctrl0.map(p => [p[0] * K, ZP(p[1])]);
+  const ctrl = [[29, -13.5], [29.8, -5], [28.8, 4], [25.2, 12.5], [18, 18.6], [8, 22], [0, 22.8], [-8, 22], [-18, 18.6], [-25.2, 12.5], [-28.8, 4], [-29.8, -5], [-29, -13.5]];
   const outline = spline(ctrl, 8), walk = scaleP(outline, .955);
   const wz = x => edgeZ(x, walk);
   S.outline = outline; S.walk = walk;
   S.walkable = (x, z) => inPoly(x, z, walk);
 
   /* ---------- ground + sea ---------- */
-  { const land = new MB(); land.floor(-190, -120, 190, ZB, 0, mul(ST.apron, [1, 1, 1]), [0, 0, 380 / 4, (ZB + 120) / 4]); add(land, { tex: T.pave });
+  { const land = new MB(); land.floor(-130, -70, 130, -13.5, 0, mul(ST.apron, [1, 1, 1]), [0, 0, 260 / 4, 56.5 / 4]); add(land, { tex: T.pave });
     const pv = new MB(); pv.poly(outline, 0, ST.pave, 4); add(pv, { tex: T.pave });
     const prom = new MB(); strip(prom, outline, scaleP(outline, .97), .014, mul(ST.pave, [1.12, 1.1, 1.05])); add(prom, {});
     const seaTex = R.paint(256, 256, g => { const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, ST.sea[0]); gr.addColorStop(1, ST.sea[1]); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); const r = rnd(7); g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 3; for (let i = 0; i < 26; i++) { const x = r() * 256, y = r() * 256, w = 20 + r() * 40; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 6, x + w, y); g.stroke(); g.beginPath(); g.moveTo(x - 256, y); g.quadraticCurveTo(x - 256 + w / 2, y - 6, x - 256 + w, y); g.stroke(); } });
     const seaEm = R.paint(64, 64, g => { g.fillStyle = '#10305a'; g.fillRect(0, 0, 64, 64); });
-    const sea = new MB(); sea.floor(-190, ZB - .1, 190, 120, -.9, [1, 1, 1], [0, 0, 26, 11.4]); add(sea, { tex: seaTex, em: seaEm, emDay: .0, emNight: .8 });
+    const sea = new MB(); sea.floor(-130, -13.6, 130, 100, -.9, [1, 1, 1], [0, 0, 26, 11.4]); add(sea, { tex: seaTex, em: seaEm, emDay: .0, emNight: .8 });
     // seawall: outer face + cap + foam
     const wl = new MB(); wallv(wl, outline, -.9, .38, [.84, .8, .78]); strip(wl, outline, scaleP(outline, .985), .38, [.95, .92, .9]); add(wl, {});
-    const quay = new MB(); quay.quad([29 * K, -.9, ZB], [190, -.9, ZB], [190, 0, ZB], [29 * K, 0, ZB], [0, 0, 1], [0, 0, 1, 1], [.8, .76, .74]); quay.quad([-190, -.9, ZB], [-29 * K, -.9, ZB], [-29 * K, 0, ZB], [-190, 0, ZB], [0, 0, 1], [0, 0, 1, 1], [.8, .76, .74]); add(quay, {});
+    const quay = new MB(); quay.quad([29, -.9, -13.5], [130, -.9, -13.5], [130, 0, -13.5], [29, 0, -13.5], [0, 0, 1], [0, 0, 1, 1], [.8, .76, .74]); quay.quad([-130, -.9, -13.5], [-29, -.9, -13.5], [-29, 0, -13.5], [-130, 0, -13.5], [0, 0, 1], [0, 0, 1, 1], [.8, .76, .74]); add(quay, {});
     const foam = new MB(); strip(foam, scaleP(outline, 1.0), scaleP(outline, 1.035), -.86, [.55, .6, .65]); add(foam, { mode: 2, tex: T.pave, glow: e => .2 + e.night * .25 });
     // rail
     const rl = new MB(), rp = new MB(); const ro = scaleP(outline, .99);
@@ -110,18 +97,18 @@ function makePlazaV3(R, T, styleName) {
     const mb = new MB(); mb.box(x0, 0, z0, x1, h, z1, [1, 1, 1], tile || [16, 14], { noTop: true }); add(mb, { tex: f.tex, em: f.em, emNight: 1.5 });
     const r = new MB(); r.box(x0 - .15, h, z0 - .15, x1 + .15, h + .5, z1 + .15, roofCol); add(r, {});
   };
-  withShift(0, -24, () => { const r = rnd(99), facs = ST.far.map((w, i) => FA(i + 1, { wall: w, cols: 6, rows: 8, lit: .5 }));
+  { const r = rnd(99), facs = ST.far.map((w, i) => FA(i + 1, { wall: w, cols: 6, rows: 8, lit: .5 }));
     for (let x = -104, k = 0; x < 104; x += 7 + r() * 6, k++) {
       const w = 7 + r() * 6, h = 20 + r() * 34, z0 = -60 - r() * 12, f = facs[k % 3]; const mb = new MB(); mb.box(x, 0, z0, x + w, h, z0 + 11, [1, 1, 1], [16, 14], { noTop: true }); add(mb, { tex: f.tex, em: f.em, emNight: 1.5 });
       const rf = new MB(); rf.box(x - .1, h, z0 - .1, x + w + .1, h + .6, z0 + 11.1, roofCol); add(rf, {});
       if (r() < .5) { const gl = new MB(); halo(gl, x + w / 2, h + 1.5, z0 + 11.2, 3.2, r() < .5 ? A2 : A); add(gl, { tex: T.glow, mode: 2, glow: night(.9) }); }
-    } });
-  at(0, -36, () => building(-14, 14, -50, -22, 24, FA(6, { wall: ST.mid[2], cols: 5, rows: 6, lit: .5 })));
-  at(-37.75, -23.75, () => building(-46, -29.5, -34, -13.5, 20, FA(4, { wall: ST.mid[0], cols: 4, rows: 6, lit: .5 })));
-  at(37.75, -23.75, () => building(29.5, 46, -34, -13.5, 22, FA(5, { wall: ST.mid[1], cols: 4, rows: 6, lit: .55 })));
+    } }
+  building(-14, 14, -50, -22, 24, FA(6, { wall: ST.mid[2], cols: 5, rows: 6, lit: .5 }));
+  building(-46, -29.5, -34, -13.5, 20, FA(4, { wall: ST.mid[0], cols: 4, rows: 6, lit: .5 }));
+  building(29.5, 46, -34, -13.5, 22, FA(5, { wall: ST.mid[1], cols: 4, rows: 6, lit: .55 }));
 
   /* FASHION DISTRICT (left of the stage) */
-  at(-20.7, -13.5, () => { const x0 = -29, x1 = -12.5, zf = -13.5, h = 9.5, dc = -20.7;
+  { const x0 = -29, x1 = -12.5, zf = -13.5, h = 9.5, dc = -20.7;
     const mb = new MB(); mb.box(x0, 0, zf - 12, x1, h, zf, [1, 1, 1], [x1 - x0, h], { noTop: true }); add(mb, { tex: T.mall.tex, em: T.mall.em, emDay: .25, emNight: 1.6 });
     const rf = new MB(); rf.box(x0 - .2, h, zf - 12.2, x1 + .2, h + .5, zf + .2, [.9, .9, .96]); add(rf, {});
     const ar = new MB(); ar.arch(dc, 0, zf + .05, zf + 1.7, 6.2, 5.7, 0, Math.PI, 32, [.92, .94, 1]); add(ar, {});
@@ -131,10 +118,10 @@ function makePlazaV3(R, T, styleName) {
     const rs = T.sign('STYLE · 时尚', { w: 1024, h: 200, fs: 120, bg: '#10142e', fg: '#fff', border: ST.accent2 }), rb = new MB(); rb.box(dc - 5.5, h + .5, zf - 1, dc + 5.5, h + 3.3, zf - .8, [1, 1, 1], [11, 2.8], { noBack: true, noSides: true, noTop: true }); add(rb, { tex: rs.tex, em: rs.em, emDay: .4, emNight: 1.6 });
     const c = new MB(); c.floor(dc - 1.15, zf, dc + 1.15, zf + 3.7, .035, [.78, .12, .18]); add(c, {});
     const gl = new MB(); pool(gl, dc, -11, 6.5, A, .036); halo(gl, dc, 2.2, zf + 2, 6.5, mul(A, [.8, .9, 1])); add(gl, { tex: T.glow, mode: 2, glow: nightPlus(.1, .5) });
-    S.portals.push({ id: 'boutique', x: dc, z: -11.2, r: 2.0, label: '时尚街 · 试衣间', color: A }); });
+    S.portals.push({ id: 'boutique', x: dc, z: -11.2, r: 2.0, label: '时尚街 · 试衣间', color: A }); }
 
   /* STAR KTV (right of the stage) */
-  at(20.7, -13.5, () => { const x0 = 12.5, x1 = 29, zf = -13.5, h = 8.5, dc = 20.7;
+  { const x0 = 12.5, x1 = 29, zf = -13.5, h = 8.5, dc = 20.7;
     /* 奢侈品牌式外立面：黑色抛光石材 + 金色细线 + 大幅暖光橱窗 */
     const lxT = (em) => R.paint(256, 512, (g, w, h2) => { g.fillStyle = em ? '#000' : '#16131b'; g.fillRect(0, 0, w, h2); if (!em) { const gr = g.createLinearGradient(0, 0, w, h2); gr.addColorStop(0, 'rgba(255,255,255,.06)'); gr.addColorStop(1, 'rgba(0,0,0,.2)'); g.fillStyle = gr; g.fillRect(0, 0, w, h2); g.fillStyle = '#c9a24a'; g.fillRect(0, 0, 3, h2); g.fillRect(w - 3, 0, 3, h2); }
       const px = 34, py = 70, pw = w - 68, ph = h2 - 190; const gl = g.createLinearGradient(0, py, 0, py + ph); if (em) { gl.addColorStop(0, '#9a7a45'); gl.addColorStop(1, '#4a3820'); } else { gl.addColorStop(0, '#3a3548'); gl.addColorStop(1, '#14121c'); } g.fillStyle = gl; g.fillRect(px, py, pw, ph);
@@ -160,19 +147,19 @@ function makePlazaV3(R, T, styleName) {
     const bs = new MB(); bs.box(dc - 5.2, h + .5, zf - 1.2, dc + 5.3, h + 4.9, zf - 1.0, [1, 1, 1], [10.5, 4.4], { noBack: true, noSides: true, noTop: true }); add(bs, { tex: T.ktvScreen.tex, em: T.ktvScreen.em, emDay: .5, emNight: .9 });
     const c = new MB(); c.floor(dc - 1.6, zf, dc + 1.6, zf + 7.2, .035, [.9, .84, .7]); c.floor(dc - 1.6, zf, dc - 1.45, zf + 7.2, .037, [.95, .78, .35]); c.floor(dc + 1.45, zf, dc + 1.6, zf + 7.2, .037, [.95, .78, .35]); add(c, {});
     const gl = new MB(); pool(gl, dc, -11, 5.5, [1, .85, .55], .036); halo(gl, dc, 2.4, zf + 1.6, 4.5, [1, .85, .6]); add(gl, { tex: T.glow, mode: 2, glow: nightPlus(.02, .3) });
-    S.portals.push({ id: 'ktv', x: dc, z: -11.2, r: 2.0, label: '天皇巨星 · 接待大堂', color: A2 }); });
+    S.portals.push({ id: 'ktv', x: dc, z: -11.2, r: 2.0, label: '天皇巨星 · 接待大堂', color: A2 }); }
 
   /* hedges closing the north gaps beside the stage */
-  [[-12.5, -9.7], [9.7, 12.5]].forEach(([a, b]) => at((a + b) / 2, -13, () => { const h = new MB(); const lf = mul([.3, .62, .34], ST.leaf); h.box(a, 0, -13.5, b, .9, -12.5, lf); add(h, {}); obs(a, -13.6, b, -12.4); }));
+  { const h = new MB(); const lf = mul([.3, .62, .34], ST.leaf); h.box(-12.5, 0, -13.5, -9.7, .9, -12.5, lf); h.box(9.7, 0, -13.5, 12.5, .9, -12.5, lf); add(h, {}); obs(-12.5, -13.6, -9.7, -12.4); obs(9.7, -13.6, 12.5, -12.4); }
 
   /* ---------- CONCERT STAGE ---------- */
-  const SX0 = -9.5, SX1 = 9.5, SZ0 = -13.4, SZ1 = -6.6, SH = 1.5, STEPW = 2.2, STEPD = 1.2, DZS = (K - 1) * (-10 - ZC);   // DZS: 舞台整体后移量
-  const inDeck = (x, z, m) => x > SX0 - m && x < SX1 + m && z - DZS > SZ0 - m && z - DZS < SZ1 + m;
-  const inSteps = (x, z, m) => Math.abs(x) < STEPW + m && z - DZS > SZ1 - .01 && z - DZS < SZ1 + STEPD + m;
+  const SX0 = -9.5, SX1 = 9.5, SZ0 = -13.4, SZ1 = -6.6, SH = 1.5, STEPW = 2.2, STEPD = 1.2;
+  const inDeck = (x, z, m) => x > SX0 - m && x < SX1 + m && z > SZ0 - m && z < SZ1 + m;
+  const inSteps = (x, z, m) => Math.abs(x) < STEPW + m && z > SZ1 - .01 && z < SZ1 + STEPD + m;
   S.stageZone = (x, z, m) => inDeck(x, z, m || 0) || inSteps(x, z, m || 0);
-  S.stage = { x0: SX0, x1: SX1, z0: SZ0 + DZS, z1: SZ1 + DZS, h: SH, mic: [0, -9.6 + DZS], front: [0, -4.4 + DZS], arriveR: 2.6, leaveR: 8.5 };
-  S.heightAt = (x, z) => { if (Math.abs(x) < STEPW && z - DZS >= SZ1 && z - DZS <= SZ1 + STEPD) return SH * (1 - (z - DZS - SZ1) / STEPD); if (inDeck(x, z, 0)) return SH; return 0; };
-  withShift(0, DZS, () => { const deckTex = (em) => R.paint(1024, 366, (g, w, h) => {
+  S.stage = { x0: SX0, x1: SX1, z0: SZ0, z1: SZ1, h: SH, mic: [0, -9.6], front: [0, -4.4], arriveR: 2.6, leaveR: 8.5 };
+  S.heightAt = (x, z) => { if (Math.abs(x) < STEPW && z >= SZ1 && z <= SZ1 + STEPD) return SH * (1 - (z - SZ1) / STEPD); if (inDeck(x, z, 0)) return SH; return 0; };
+  { const deckTex = (em) => R.paint(1024, 366, (g, w, h) => {
       const mx = 512, my = (-9.6 - SZ0) / (SZ1 - SZ0) * h;
       if (!em) { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#2a2146'); gr.addColorStop(1, '#3a2e63'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 2; for (let i = 0; i < 38; i++) { g.beginPath(); g.moveTo(i * 27, 0); g.lineTo(i * 27, h); g.stroke(); } }
       else { g.fillStyle = '#000'; g.fillRect(0, 0, w, h); }
@@ -200,12 +187,17 @@ function makePlazaV3(R, T, styleName) {
     // side LED towers
     const tw = T.sign('LIVE', { w: 128, h: 512, fs: 84, vertical: true, bg: '#14092a', fg: '#ffe2f6', border: ST.accent2 });
     const tws = new MB(); [[-11.2, -10.6], [10.6, 11.2]].forEach(([a, b]) => tws.box(a, 0, -12.6, b, 7.4, -12.0, [1, 1, 1], [.6, 7.4], { noBack: true, noSides: true, noTop: true })); add(tws, { tex: tw.tex, em: tw.em, emDay: .5, emNight: 1.6 });
-    const glo = new MB(); halo(glo, 0, 6, SZ0 + .9, 9, [.8, .5, 1]); halo(glo, -10.9, 4, -12, 3.5, A2); halo(glo, 10.9, 4, -12, 3.5, A2); pool(glo, 0, -9.6, 7, A2, SH + .03); pool(glo, 0, -3.8, 8.5, A2, .036); add(glo, { tex: T.glow, mode: 2, glow: nightPlus(.04, .55) }); });
+    const glo = new MB(); halo(glo, 0, 6, SZ0 + .9, 9, [.8, .5, 1]); halo(glo, -10.9, 4, -12, 3.5, A2); halo(glo, 10.9, 4, -12, 3.5, A2); pool(glo, 0, -9.6, 7, A2, SH + .03); pool(glo, 0, -3.8, 8.5, A2, .036); add(glo, { tex: T.glow, mode: 2, glow: nightPlus(.04, .55) }); }
 
   /* ---------- song kiosk (left of the stage) ---------- */
-  { const KS0 = { R, T, S, add, occ, obs, emMat, halo, glowMat: g => ({ tex: T.glow, mode: 2, glow: g }), night }, kx = -12.6, kz = -11.6;
-    occ(() => G.Kiosk.arcade(KS0, kx, kz));
-    S.hotspots.push({ id: 'songs', x: kx, z: kz + 1.9, r: 2.0, label: '点歌台', color: A2 }); }
+  { const kx = -13.6, kz = -3.4, kb = new MB();
+    const nK = S.batches.length; kb.box(kx - 1.2, 0, kz - .6, kx + 1.2, .9, kz + .6, [.22, .18, .36]); kb.box(kx - 1.2, .9, kz - .6, kx + 1.2, 1.0, kz + .6, [.95, .92, 1]);
+    kb.box(kx - 1.1, 1.0, kz - .5, kx - .95, 3.0, kz - .3, [.22, .18, .36]); kb.box(kx + .95, 1.0, kz - .5, kx + 1.1, 3.0, kz - .3, [.22, .18, .36]); add(kb, {}); obs(kx - 1.3, kz - .7, kx + 1.3, kz + .7);
+    const sg = T.sign('点歌台 SONGS', { w: 512, h: 128, fs: 64, bg: '#14092a', fg: '#ffe2f6', border: ST.accent2 }), sb = new MB(); sb.box(kx - 1.5, 3.0, kz - .5, kx + 1.5, 3.9, kz - .3, [1, 1, 1], [3, .9], { noBack: true, noSides: true, noTop: true }); add(sb, { tex: sg.tex, em: sg.em, emDay: .6, emNight: 1.7 });
+    const scr = new MB(); scr.box(kx - .9, 1.1, kz + .1, kx + .9, 2.3, kz + .14, [1, 1, 1], [1.8, 1.2], { noBack: true, noSides: true, noTop: true }); add(scr, { tex: T.ktvScreen.tex, em: T.ktvScreen.em, emDay: .7, emNight: 1.4 });
+    occ(() => {}); { const bs = S.batches.slice(nK).filter(b => b.mat.mode === 0); if (bs.length) { const a = [1e9, 1e9, 1e9], c = [-1e9, -1e9, -1e9]; bs.forEach(b => { for (let j = 0; j < 3; j++) { a[j] = Math.min(a[j], b.bb[0][j]); c[j] = Math.max(c[j], b.bb[1][j]); } }); S.occluders.push({ bs, a, b: c, f: 1 }); } }
+    const gl = new MB(); pool(gl, kx, kz + 1.4, 4, A2, .037); halo(gl, kx, 2.6, kz + .6, 3.2, A2); add(gl, { tex: T.glow, mode: 2, glow: nightPlus(.15, .5) });
+    S.hotspots.push({ id: 'songs', x: kx, z: kz + 1.8, r: 2.0, label: '点歌台', color: A2 }); }
 
   /* ---------- seating ---------- */
   const seatAdd = (x, z, yaw, h, ap) => { const s = { x, z, yaw, h, ap, who: null, res: null }; s.hot = { id: 'sit', seat: s, x: ap[0], z: ap[1], r: 1.4 }; S.seats.push(s); return s; };
@@ -219,13 +211,8 @@ function makePlazaV3(R, T, styleName) {
     [-.55, .55].forEach(o => { const sx = x + (ew ? 0 : o) - fx * .1, sz = z + (ew ? o : 0) - fz * .1; seatAdd(sx, sz, Math.atan2(fx, fz), .5, [sx + fx * 1.15, sz + fz * 1.15]); });
   };
   const stool = (x, z, tx, tz) => { const b = new MB(); b.cyl(x, z, 0, .44, .24, .2, 10, [.85, .4, .35], true); add(b, {}); const dx = tx - x, dz = tz - z, l = Math.hypot(dx, dz) || 1, fx = dx / l, fz = dz / l; seatAdd(x, z, Math.atan2(fx, fz), .46, [x - fx * .95, z - fz * .95]); };
-  
-  [-15, -8, 8, 15].forEach(x => bench(x * K, wz(x * K) - 1.7, 's'));
-
-  /* ---------- 舞台前观众席：长椅分左右两块，中间留过道，三排朝向舞台 ---------- */
-  { const AZ = [SZ1 + DZS + 3.4, SZ1 + DZS + 5.6, SZ1 + DZS + 7.8], BX = [3.9, 6.3, 8.7];
-    AZ.forEach(z => BX.forEach(x => { bench(x, z, 'n'); bench(-x, z, 'n'); }));
-    const car = new MB(); car.floor(-1.1, SZ1 + DZS + STEPD + .1, 1.1, AZ[2] + 1.0, .03, [.62, .1, .2]); car.floor(-1.1, SZ1 + DZS + STEPD + .1, -.95, AZ[2] + 1.0, .035, [.93, .76, .36]); car.floor(.95, SZ1 + DZS + STEPD + .1, 1.1, AZ[2] + 1.0, .035, [.93, .76, .36]); add(car, {}); }
+  [0.5, 6, 11.5].forEach(z => { bench(-16.2, z, 'e'); bench(16.2, z, 'w'); });
+  [-15, -8, 8, 15].forEach(x => bench(x, wz(x) - 1.7, 's'));
 
   /* pavilions with tables */
   const pavilion = (cx, cz, label, wallCol) => {
@@ -240,14 +227,13 @@ function makePlazaV3(R, T, styleName) {
       [[-.95, 0], [.95, 0], [0, .95], [0, -.95]].forEach(([dx, dz]) => stool(x + dx, z + dz, x, z)); });
     const gl = new MB(); pool(gl, cx, cz, 5, [1, .8, .55], .036); halo(gl, cx, 3.0, cz + pd, 4, [1, .8, .5]); add(gl, { tex: T.glow, mode: 2, glow: night(.5) });
   };
-  { const KS = { R, T, S, add, occ, obs, emMat, halo, glowMat: g => ({ tex: T.glow, mode: 2, glow: g }), night, seatAdd };
-    G.Shops.cafeShop(KS, -18 * K, ZP(0.5), { s: -1 }); G.Shops.bobaShop(KS, 18 * K, ZP(0.5), { s: 1 }); }
+  pavilion(-21.6, 5.5, 'CAFE 咖啡', [.93, .82, .62]); pavilion(21.6, 5.5, 'BOBA 奶茶', [.86, .62, .88]);
 
   /* ---------- lamps + banners + string lights ---------- */
-  const lamps0 = [[-25.5, -10.5], [-15.5, -10.5], [-11.2, -8.2], [11.2, -8.2], [15.5, -10.5], [25.5, -10.5],
+  const lamps = [[-25.5, -10.5], [-15.5, -10.5], [-11.2, -8.2], [11.2, -8.2], [15.5, -10.5], [25.5, -10.5],
     [-26.5, -1], [-26.5, 10], [26.5, -1], [26.5, 10],
     [-19, wz(-19) - 1], [-10, wz(-10) - 1], [0, wz(0) - 1], [10, wz(10) - 1], [19, wz(19) - 1],
-    [-12.5, 1.2], [12.5, 1.2]], lamps = lamps0.map(([x, z], i) => i >= 10 && i <= 14 ? [x * K, wz(x * K) - 1] : [x * K, ZP(z)]);
+    [-12.5, 1.2], [12.5, 1.2]];
   { const poles = new MB(), heads = new MB(), halos = new MB(), pools = new MB(), ban = new MB();
     lamps.forEach(([x, z], i) => {
       { const pl1 = new MB(), hd1 = new MB(); pl1.cyl(x, z, 0, 4.6, .09, .06, 8, [.22, .2, .32]); pl1.cyl(x, z, 0, .4, .22, .15, 8, [.22, .2, .32]); pl1.cyl(x, z, 4.3, 4.35, .22, .22, 8, [.9, .8, .4]); hd1.sphere(x, 4.8, z, .3, .3, .3, [1, 1, 1], 8); occ(() => { add(pl1, {}); add(hd1, emMat([1, .94, .78], .35, 2.2)); }); }
@@ -269,7 +255,7 @@ function makePlazaV3(R, T, styleName) {
   { const pl = new MB(), fl = new MB(), r = rnd(21);
     const bed = (x, z, hw, hd) => { pl.box(x - hw, 0, z - hd, x + hw, .5, z + hd, [.82, .78, .72]); pl.box(x - hw + .12, .5, z - hd + .12, x + hw - .12, .62, z + hd - .12, [.32, .24, .18]); obs(x - hw - .05, z - hd - .05, x + hw + .05, z + hd + .05);
       const nx = Math.round(hw * 3.2), nz = Math.round(hd * 3.2); for (let i = 0; i < nx * nz; i++) { const px = x + (r() * 2 - 1) * (hw - .2), pz = z + (r() * 2 - 1) * (hd - .2); fl.sphere(px, .78 + r() * .22, pz, .17, .15, .17, [.3 * ST.leaf[0], .62 * ST.leaf[1], .34 * ST.leaf[2]], 4); if (r() < .75) fl.sphere(px, .95 + r() * .2, pz, .11, .1, .11, hex(ST.flowers[(r() * ST.flowers.length) | 0]), 4); } };
-    [[-18.5, -4.5, 1.3, .8], [18.5, -4.5, 1.3, .8], [-24.5, -7.5, .9, 1.4], [24.5, -7.5, .9, 1.4], [-5.5, 17, 1.3, .8], [5.5, 17, 1.3, .8], [-24.5, 13, 1, 1], [24.5, 13, 1, 1]].forEach(([x, z, a, b]) => bed(x * K, ZP(z), a, b));
+    bed(-18.5, -4.5, 1.3, .8); bed(18.5, -4.5, 1.3, .8); bed(-24.5, -7.5, .9, 1.4); bed(24.5, -7.5, .9, 1.4); bed(-5.5, 17, 1.3, .8); bed(5.5, 17, 1.3, .8); bed(-24.5, 13, 1, 1); bed(24.5, 13, 1, 1);
     add(pl, {}); add(fl, {}); }
   { const tr = new MB(), lf = new MB(), lf2 = new MB(), fb = new MB(), hal = new MB(), r = rnd(31), L = ST.leaf;
     const frond = (x, y, z, ang, len, c1, c2) => { const dx = Math.cos(ang), dz = Math.sin(ang), px = -dz, pz = dx, m = [x + dx * len * .55, y + len * .3, z + dz * len * .55], t = [x + dx * len, y - len * .18, z + dz * len], w = len * .17; lf.tri([x, y, z], [m[0] + px * w, m[1], m[2] + pz * w], [m[0] - px * w, m[1], m[2] - pz * w], [0, 1, 0], c1); lf2.tri([m[0] + px * w, m[1], m[2] + pz * w], [m[0] - px * w, m[1], m[2] - pz * w], t, [0, 1, 0], c2); };
@@ -279,8 +265,8 @@ function makePlazaV3(R, T, styleName) {
       tr.sphere(tx, ty - .1, z, .22, .2, .22, [.4, .3, .2], 5); obs(x - .3, z - .3, x + .3, z + .3);
       for (let k = 0; k < 6; k++) { const a = k * 1.05, px = tx + Math.cos(a) * .9, pz2 = z + Math.sin(a) * .9; fb.sphere(px, ty + .1, pz2, .06, .06, .06, [1, 1, 1], 4); if (k % 2) halo(hal, px, ty + .1, pz2, .5, [1, .85, .5]); }
       occ(() => { add(tr, {}); add(lf, {}); add(lf2, {}); add(fb, emMat([1, .92, .6], .3, 2.2)); }); };
-    [-22, -13, -4.5, 4.5, 13, 22].filter(x => Math.abs(x) < 10).forEach((x, i) => palm(x * K, wz(x * K) - .9, 5 + (i % 3) * .5, (i % 2 ? .5 : -.5)));
-    palm(-27.2 * K, ZP(8), 5, .3); palm(27.2 * K, ZP(8), 5.4, -.3);
+    [-22, -13, -4.5, 4.5, 13, 22].forEach((x, i) => palm(x, wz(x) - .9, 5 + (i % 3) * .5, (i % 2 ? .5 : -.5)));
+    palm(-24.5, -2, 5.2, .4); palm(24.5, -2, 5.6, -.4); palm(-27, 7.5, 5, .3); palm(27, 7.5, 5.4, -.3); palm(-12, 5, 4.6, .3); palm(12, 5, 4.6, -.3);
     add(hal, { tex: T.glow, mode: 2, glow: night(.7) }); }
 
   /* ---------- dynamic: LED redraw / spray / beams / sparkles ---------- */
@@ -291,21 +277,20 @@ function makePlazaV3(R, T, styleName) {
     for (let k = 0; k < 36; k++) { const ph = (t * .7 + k / 36) % 1, a = k * 2.399, r = ph * 1.9 * (.4 + (k % 5) * .15), y = 2.7 + 1.6 * Math.sin(Math.min(1, ph * 1.15) * Math.PI) - ph * ph * 1.9, x = CX + Math.cos(a) * r, z = CZ + Math.sin(a) * r, s = .1 + (1 - ph) * .05, P = (u, v) => [x + u * s, y + c * v * s, z - sn * v * s];
       fx.spray.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), [0, 1, 0], [0, 0, 1, 1], [.75, .95, 1]); }
     const cols = [A, A2, [1, .95, .8], mul(A, [.8, .8, 1])];
-    for (let k = 0; k < 6; k++) { const hx = -7.5 + k * 3, hy = 9.0, hz = SZ0 + 1.2 + DZS, tx = hx + Math.sin(t * (.7 + k * .11) + k * 1.9) * (4 + act * 3), tz = -4 + DZS + Math.cos(t * (.5 + k * .09) + k * 2.3) * 3, w0 = .12, w1 = 1.0 + act * .4, col = cols[k % 4].map(v => v * (.6 + .4 * Math.sin(t * 2 + k)));
+    for (let k = 0; k < 6; k++) { const hx = -7.5 + k * 3, hy = 9.0, hz = SZ0 + 1.2, tx = hx + Math.sin(t * (.7 + k * .11) + k * 1.9) * (4 + act * 3), tz = -4 + Math.cos(t * (.5 + k * .09) + k * 2.3) * 3, w0 = .12, w1 = 1.0 + act * .4, col = cols[k % 4].map(v => v * (.6 + .4 * Math.sin(t * 2 + k)));
       fx.beam.quad([hx - w0, hy, hz], [hx + w0, hy, hz], [tx + w1, .05, tz], [tx - w1, .05, tz], [0, 1, 0], [0, 0, 1, 1], col); }
-    (S.shopFx || []).forEach(fn => fn(fx, t, c, sn));
     fx.glow = { spray: 1, beam: (.12 + .62 * act) * (.3 + .7 * nt), spark: .7 * (.25 + .75 * nt) };
     for (let k = 0; k < 70; k++) { const ph = (t * .35 + k * .137) % 1, tw = Math.max(0, Math.sin(ph * 6.283 * 2 + k)), a = (k * 97.3) % 1, x = -60 + ((k * 53.7) % 120), z = 24 + ((k * 31.3) % 36), s = .16 * tw, P = (u, v) => [x + u * s * 2, -.85, z + v * s]; if (tw > .1 && (x * x * .0 + 1) && !inPoly(x, z, outline)) fx.spark.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), [0, 1, 0], [0, 0, 1, 1], [.85, .95, 1]); }
   };
   S.dynPool = (mb, g, env, t) => { const stg = g && g.stg ? g.stg : { mode: 'idle' };
-    if (stg.mode === 'sing' || stg.mode === 'wait') { const k = (stg.mode === 'sing' ? 1 : .6) * (.7 + .3 * Math.sin(t * 4)); pool(mb, 0, -9.6 + DZS, 3.6, [1 * k, .9 * k, .75 * k], SH + .04); }
-    if (stg.you) { const k = .6 + .4 * Math.sin(t * 6); pool(mb, 0, SZ1 + 1.6 + DZS, 2.4, [.3 * k, 1 * k, .5 * k], .05); } };
+    if (stg.mode === 'sing' || stg.mode === 'wait') { const k = (stg.mode === 'sing' ? 1 : .6) * (.7 + .3 * Math.sin(t * 4)); pool(mb, 0, -9.6, 3.6, [1 * k, .9 * k, .75 * k], SH + .04); }
+    if (stg.you) { const k = .6 + .4 * Math.sin(t * 6); pool(mb, 0, SZ1 + 1.6, 2.4, [.3 * k, 1 * k, .5 * k], .05); } };
 
-  S.bounds = { x0: -31 * K, x1: 31 * K, z0: ZP(-14), z1: ZP(24) };
-  S.spawn = [0, ZP(2.5)];
-  S.camera = { dist: 24, pitch: PITCH, fov: .72, clampX: [-29, 29], clampZ: [ZB + 6.5, ZP(22.8) - 12.8], lead: 6 };
+  S.bounds = { x0: -31, x1: 31, z0: -14, z1: 24 };
+  S.spawn = [0, 2.5];
+  S.camera = { dist: 24, pitch: PITCH, fov: .72, clampX: [-14, 14], clampZ: [-7, 10], lead: 6 };
   S.cameraWide = { dist: 27, pitch: .14, fov: 1.05 };
-  S.npcRect = { x0: -26 * K, x1: 26 * K, z0: ZP(-5.5), z1: ZP(20) };
+  S.npcRect = { x0: -26, x1: 26, z0: -5.5, z1: 20 };
   S.name = '星光广场'; S.indoor = false;
   S.env = h => G.World.envAt(h);
   return S;

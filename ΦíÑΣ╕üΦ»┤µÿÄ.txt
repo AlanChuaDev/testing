@@ -1,6 +1,0 @@
-补丁（基于你仓库 AlanChuaDev/testing 当前版本 gm14）—— 只含前端文件，不需要重新部署 Render
-直接把 js/ 和 index.html 按相同路径覆盖进仓库即可，不会动 game.js / css / assets / server.js 等你的文件。
-
-新增：js/bigshops.js（奶茶店+咖啡店）、js/songkiosk.js（3款点歌机）
-修改：js/plaza.js（已把你新加的歌词版 LED 一起保留）、js/ktvrooms.js、js/ktv.js、js/boutique.js、js/scenes.js、
-      js/scene_beach.js、js/scene_funfair.js（回广场出生点）、index.html（脚本列表加 2 个文件 + 版本号 20261104-map1）
