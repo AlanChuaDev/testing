@@ -407,3 +407,10 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
    这里让所有面板、聊天记录、登录页允许「竖向滑动」；左右滑动的导航条单独允许横向。 */
 .sheet,.sheet *,#log,#login,#login *{touch-action:pan-y}
 #gmPanel .gmNav,#gmPanel .gmNav *{touch-action:pan-x pan-y}
+
+/* Patch: hide duplicated appearance selectors on initial entry; use the dedicated creator. */
+#lgCreate > .lgRow:has(#lgHair),
+#lgCreate > .lgRow:has(#lgTop),
+#lgCreate > .lgRow:has(#lgBot),
+#lgCreate > .lgRow:has(#lgSkin),
+#lgCreate #lgRandom{display:none!important}
