@@ -772,7 +772,7 @@ wss.on("connection", (ws) => {
     }
 
     // ----- 资料 / 好友 / 私信（需要登录）-----
-    if (/^(profile_|name_set|friends?_|dm_)/.test(m.type)) {
+    if (/^(profile_|name_set|friends?_|dm_|care$|wallet_|sign_in$|shop_|gift_)/.test(m.type)) {   // 问暖 / 钱包 / 签到 / 商店 / 礼物 的消息也要走这里（以前漏了，所以点了没反应）
       if (!S) throw UE("社交功能暂未开启");
       if (!ws.authed) throw UE("请先登录：点左上角「我」→ 账号");
       const pubArg = () => { const p = String(m.pub || "").slice(0, 16); if (!/^[0-9a-f]{16}$/.test(p)) throw UE("参数不对"); return p; };
