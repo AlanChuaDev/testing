@@ -115,6 +115,7 @@ function onMsg(m) {
     case 'online': totalOnline = m.n || 0; refreshCount(); break;
     case 'playerJoined': addRemote(m.playerId, m.info || {}, m.state); break;
     case 'playerLeft': dropRemote(m.playerId); break;
+    case 'cos': { const e = remotes.get(m.playerId); if (e) e.cos = m.cos || null; break; }
     case 'gmBadge': { const e = remotes.get(m.playerId); if (e) e.isGM = !!m.isGM; break; }
     case 'gmKicked': { toast(m.message || '已被 GM 請出房间', 2500); joinedRoom = null; inRoom = false; wantRoom = null; clearRemotes(); break; }
     case 'rename': { const e = remotes.get(m.playerId); if (e) e.name = m.name; break; }
@@ -140,7 +141,7 @@ function onMsg(m) {
 function addRemote(id, info, st) {
   if (remotes.has(id) || id === myId) return;
   const e = api.makeEntity(st ? st.x : 0, st ? st.z : 0, info.name || '玩家', Object.assign({ scale: 1 }, info.outfit || {}), false);
-  e.remote = true; e.pid = id; e.pub = info.pub || ''; e.isGM = !!info.isGM; e.tx = e.x; e.tz = e.z; e.ty = 0; e.mode = 'remote';
+  e.remote = true; e.pid = id; e.pub = info.pub || ''; e.isGM = !!info.isGM; e.cos = info.cos || null; e.tx = e.x; e.tz = e.z; e.ty = 0; e.mode = 'remote';
   remotes.set(id, e); G.remotes.push(e);
   if (st) applyState(e, st, true);
   api.addMsg('world', '', '👋 ' + e.name + ' 来到了这里', false, true);

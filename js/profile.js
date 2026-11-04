@@ -120,6 +120,7 @@ function renderFriends() {
   [...S.friends].sort((a, c) => (c.online ? 1 : 0) - (a.online ? 1 : 0)).forEach(f => wrap.append(h('div', { class: 'frItem' }, h('div', { class: 'frRow' },
     h('i', { class: 'frDot' + (f.online ? ' on' : '') }), h('span', { class: 'frN', text: f.name || '玩家' }), f.unread ? h('b', { class: 'frUn', text: f.unread > 99 ? '99+' : String(f.unread) }) : null,
     h('button', { class: 'chip', type: 'button', text: '资料', onclick: () => viewProfile(f.pub) }), h('button', { class: 'chip on', type: 'button', text: '私信', onclick: () => openDm(f.pub, f.name) }),
+    h('button', { class: 'chip', type: 'button', text: '🎁', title: '送礼物', onclick: () => { if (window.Shop) Shop.openGift(f.pub, f.name); } }),
     h('button', { class: 'chip', type: 'button', text: '✕', title: '删除好友', onclick: () => { if (confirm('删除好友「' + (f.name || '') + '」？')) send({ type: 'friend_remove', pub: f.pub }); } })), bondLine(f))));
   b.append(wrap);
 }

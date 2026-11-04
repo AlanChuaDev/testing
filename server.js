@@ -137,7 +137,9 @@ let SocialMod = null; try { SocialMod = require("./social.js"); } catch (e) { co
 const AUTH = SocialMod ? SocialMod.createAuth() : null;
 const S = AUTH ? SocialMod.create({ store: AUTH.store, filterText }) : null;
 let BondsMod = null; try { BondsMod = require("./bonds.js"); } catch (e) { console.warn("bonds.js not found:", e.message); }
-const B = S && BondsMod ? BondsMod.create({ store: AUTH.store }) : null;   // 好友亲密度（没登录服务 / 没 bonds.js 时关闭）
+const B = S && BondsMod ? BondsMod.create({ store: AUTH.store }) : null;
+let WalletMod = null, SD = null; try { WalletMod = require("./wallet.js"); SD = require("./js/shopdata.js"); } catch (e) { console.warn("wallet.js / shopdata.js not found:", e.message); }
+const W = S && WalletMod ? WalletMod.create({ store: AUTH.store }) : null;   // 钱包：金币 / 签到 / 商店 / 礼物（只有登录用户有）   // 好友亲密度（没登录服务 / 没 bonds.js 时关闭）
 const UE = (m) => { const e = new Error(m); e.user = true; return e; };
 const byPubWs = new Map(); // pub -> 当前在线的连接（登录用户）
 
@@ -474,6 +476,7 @@ wss.on("connection", (ws) => {
           byPubWs.set(ws.pub, ws);
           send(ws, { type: "me_profile", profile: S.publicMe(prof), acct: ws.acct });
           await pushFriends(ws.pub); presence(ws);
+          if (W) { try { const wv = await W.view(ws.pub); ws.cos = wv.equip; send(ws, Object.assign({ type: "wallet" }, wv)); } catch (e) { console.warn("wallet load failed:", e.message); } }
         } catch (e) { console.error("account load failed:", e.message); ws.authed = false; ws.name = cleanName(m.name); ws.blocks = new Set(); send(ws, { type: "auth_fail", message: "账号服务暂时不可用，已作为游客进入" }); }
       }
       send(ws, { type: "hello_ok", pub: ws.pub, authed: !!ws.authed });
@@ -657,7 +660,7 @@ wss.on("connection", (ws) => {
       if (!rooms.has(room)) rooms.set(room, new Map());
       const players = rooms.get(room);
       if (!ws.authed) ws.name = cleanName(m.name);
-      ws.info = { name: ws.name, outfit: cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM };
+      ws.info = { name: ws.name, outfit: cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM, cos: ws.cos || null };
       // 告诉新玩家：房间里已有的人
       for (const [pid, p] of players.entries()) {
         if (p.ws.gmInvisible && !ws.isGM) continue;
@@ -679,7 +682,7 @@ wss.on("connection", (ws) => {
       if (!ws.room) return;
       const p = rooms.get(ws.room)?.get(ws.playerId);
       if (!p) return;
-      p.info = ws.info = { name: p.info.name, outfit: cleanOutfit(m.outfit), pub: ws.pub };
+      p.info = ws.info = { name: p.info.name, outfit: cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM, cos: ws.cos || null };
       sendToRoom(ws.room, { type: "outfit", playerId: ws.playerId, outfit: p.info.outfit }, ws);
       return;
     }
@@ -801,6 +804,43 @@ wss.on("connection", (ws) => {
         send(ws, { type: "dm", pub: to, mine: true, text: g.text, at: r.at });
         if (tw) send(tw, { type: "dm", pub: ws.pub, name: ws.name, mine: false, text: g.text, at: r.at });
         bondGain(ws.pub, to, "dm", 1);
+        return;
+      }
+      /* ---------- 钱包 / 签到 / 商店 / 礼物（需要登录） ---------- */
+      if (m.type === "wallet_get" || m.type === "wallet_delta" || m.type === "sign_in" || m.type === "shop_buy" || m.type === "shop_equip" || m.type === "gift_send") {
+        if (!W || !ws.authed) { if (m.type !== "wallet_get" && m.type !== "wallet_delta") throw UE("请先登录账号"); return; }
+        const sendWallet = async (extra) => send(ws, Object.assign({ type: "wallet" }, await W.view(ws.pub), extra || {}));
+        if (m.type === "wallet_get") return sendWallet();
+        if (m.type === "wallet_delta") { const r = await W.apply(ws.pub, m.delta); return sendWallet(r.ok ? (r.capped ? { note: "earn_cap" } : {}) : { note: r.reason || "rejected" }); }
+        if (m.type === "sign_in") {
+          const r = await W.signIn(ws.pub);
+          if (r.done) { send(ws, { type: "toast", message: "今天已经签到过了，明天再来 📅" }); return sendWallet(); }
+          send(ws, { type: "sign_ok", reward: r.reward, streak: r.streak }); return sendWallet();
+        }
+        if (m.type === "shop_buy") {
+          let it; try { it = await W.buy(ws.pub, String(m.id || "")); } catch (e) { throw UE(e.message); }
+          send(ws, { type: "shop_ok", id: it.id, name: it.name }); return sendWallet();
+        }
+        if (m.type === "shop_equip") {
+          let eq; try { eq = await W.equip(ws.pub, String(m.slot || ""), m.id ? String(m.id) : null); } catch (e) { throw UE(e.message); }
+          ws.cos = eq; if (ws.info) ws.info.cos = eq;
+          if (ws.room && !ws.gmInvisible) sendToRoom(ws.room, { type: "cos", playerId: ws.playerId, cos: eq }, ws);
+          return sendWallet();
+        }
+        if (m.type === "gift_send") {
+          const to = pubArg(); if (to === ws.pub) throw UE("不能送给自己");
+          const tw = byPubWs.get(to); if (!tw) throw UE("对方现在不在线");
+          if (isBlocked(ws, tw)) throw UE("送不出去");
+          const gid = String(m.gift || ""); if (!SD.giftById[gid]) throw UE("没有这个礼物");
+          const nowT = Date.now(); if (ws.giftT && nowT - ws.giftT < 400) throw UE("送得太快啦"); ws.giftT = nowT;
+          let g; try { g = await W.gift(ws.pub, to, gid); } catch (e) { throw UE(e.message); }
+          const fx = { type: "gift_fx", gift: g.id, fromPid: ws.playerId, fromName: ws.name, toPid: tw.playerId, toName: tw.name };
+          if (ws.room) sendToRoom(ws.room, fx); else send(ws, fx);
+          if (tw.room !== ws.room) send(tw, fx);
+          send(tw, { type: "toast", message: "🎁 " + ws.name + " 送了你 " + g.icon + g.name });
+          if (ws.friendSet && ws.friendSet.has(to)) bondGain(ws.pub, to, "gift", Math.max(1, Math.round(g.price / 5)));   // 送给好友：亲密度 = 价格 ÷ 5
+          return sendWallet();
+        }
         return;
       }
       if (m.type === "care") { // 每日问暖：给好友发一句问候，双方亲密度增加；每人每天对每个好友一次

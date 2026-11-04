@@ -287,6 +287,7 @@ function friendButtons(e, btn) {                  // 查看资料 / 加好友 / 
     btn('👤 查看资料', () => { closeMenu(); F.viewProfile(e.pub); }, '', !F.authed),
     rel === 'friend' ? btn('💬 私信', () => { closeMenu(); F.openDm(e.pub, e.name); }, '', !ok)
       : btn(rel === 'out' ? '⏳ 好友申请已发送' : rel === 'in' ? '✅ 同意 TA 的好友申请' : '➕ 加好友', () => { if (rel === 'in') Net.send({ type: 'friend_accept', pub: e.pub }); else Net.send({ type: 'friend_request', pub: e.pub }); closeMenu(); }, '', !ok || rel === 'out'),
+    btn('🎁 送礼', () => { closeMenu(); if (window.Shop) Shop.openGift(e.pub, e.name); }, '', !F.authed),
   ];
 }
 function menuReport() {

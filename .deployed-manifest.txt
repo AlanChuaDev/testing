@@ -84,6 +84,8 @@ js/scene-klcc.js
 js/scene_beach.js
 js/scene_funfair.js
 js/scenes.js
+js/shop.js
+js/shopdata.js
 js/songkiosk.js
 js/songs.js
 js/team.js
@@ -91,3 +93,4 @@ js/world.js
 package.json
 server.js
 social.js
+wallet.js
