@@ -1,18 +1,6 @@
+
 #!/usr/bin/env python3
-"""
-Unpack the newest *.zip in the repo root over the previously deployed game files.
-
-Features:
-
-- Only files previously deployed (listed in .deployed-manifest.txt) are deleted
-  during a full deployment.
-- Patch mode: files are added or overwritten without deleting old files.
-- Automatically strips a single wrapper folder containing index.html.
-- Ignores .github/ and *.zip inside the archive.
-- Synchronizes with the latest remote main branch before pushing.
-- Automatically retries non-fast-forward push failures.
-- Does not force-push or overwrite remote commits.
-  """
+"""Unpack ZIP files and safely update the GitHub repository."""
 
 import glob
 import os
@@ -24,441 +12,381 @@ import time
 import zipfile
 
 MANIFEST = ".deployed-manifest.txt"
-MAX_PUSH_RETRIES = 5
+MAX_RETRIES = 5
 
---------------------------------------------------
 
-Git helpers
-
---------------------------------------------------
+# --------------------------------------------------
+# Git helpers
+# --------------------------------------------------
 
 def git(*args, check=True):
-result = subprocess.run(
-["git", *args],
-capture_output=True,
-text=True
-)
+    result = subprocess.run(
+        ["git"] + list(args),
+        capture_output=True,
+        text=True
+    )
 
-if check and result.returncode != 0:
-    print("Git command failed:", " ".join(args))
-    print(result.stdout)
-    print(result.stderr)
-    sys.exit(result.returncode)
+    if check and result.returncode != 0:
+        print("Git error:", " ".join(args))
+        print(result.stdout)
+        print(result.stderr)
+        sys.exit(result.returncode)
 
-return result
+    return result
 
-def git_output(*args):
-return git(*args).stdout.strip()
 
-def current_branch():
-branch = os.environ.get("GITHUB_REF_NAME")
+# --------------------------------------------------
+# Find uploaded ZIP
+# --------------------------------------------------
 
-if branch:
-    return branch
-
-branch = git_output(
-    "branch",
-    "--show-current"
-)
-
-return branch or "main"
-
---------------------------------------------------
-
-Find ZIP
-
---------------------------------------------------
-
-zips = sorted(
-glob.glob("*.zip"),
-key=lambda p: (
-subprocess.run(
-[
-"git",
-"log",
-"-1",
-"--format=%ct",
-"--",
-p
-],
-capture_output=True,
-text=True
-).stdout.strip() or "0",
-p
-)
-)
+zips = sorted(glob.glob("*.zip"))
 
 if not zips:
-print("No ZIP found, nothing to do.")
-sys.exit(0)
+    print("No ZIP found.")
+    sys.exit(0)
 
-z = zips[-1]
+zip_file = zips[-1]
 
-print("Unpacking:", z)
+print("Using ZIP:", zip_file)
 
-PATCH = z.lower().endswith("-patch.zip")
+PATCH = zip_file.lower().endswith("-patch.zip")
 
 if PATCH:
-print("Patch mode enabled: only add or overwrite files.")
+    print("Patch mode: keeping existing files.")
 else:
-print("Full deployment mode enabled.")
+    print("Full deployment mode.")
 
---------------------------------------------------
 
-Extract ZIP safely
-
---------------------------------------------------
+# --------------------------------------------------
+# Extract ZIP safely
+# --------------------------------------------------
 
 tmp = tempfile.mkdtemp()
 
 try:
-with zipfile.ZipFile(z) as zf:
+    with zipfile.ZipFile(zip_file) as archive:
 
-    for n in zf.namelist():
+        for name in archive.namelist():
 
-        normalized = n.replace("\\", "/")
+            normalized = name.replace("\\", "/")
+
+            if (
+                os.path.isabs(name)
+                or ".." in normalized.split("/")
+            ):
+                sys.exit("Unsafe ZIP path: " + name)
+
+        archive.extractall(tmp)
+
+    # Remove unnecessary files
+    for root, dirs, files in os.walk(tmp):
+
+        for directory in list(dirs):
+
+            if directory == "__MACOSX":
+
+                shutil.rmtree(
+                    os.path.join(root, directory)
+                )
+
+                dirs.remove(directory)
+
+        for filename in files:
+
+            if filename == ".DS_Store":
+
+                os.remove(
+                    os.path.join(root, filename)
+                )
+
+    # Find the directory containing index.html
+    src = tmp
+
+    while True:
+
+        entries = os.listdir(src)
 
         if (
-            os.path.isabs(n)
-            or ".." in normalized.split("/")
+            len(entries) == 1
+            and os.path.isdir(
+                os.path.join(src, entries[0])
+            )
+            and not os.path.exists(
+                os.path.join(src, "index.html")
+            )
         ):
-            sys.exit(
-                "Unsafe path in ZIP: " + n
-            )
 
-    zf.extractall(tmp)
+            src = os.path.join(src, entries[0])
 
-# Remove junk files
-for root, dirs, files in os.walk(tmp):
+        else:
+            break
 
-    for d in list(dirs):
-
-        if d in ("__MACOSX", ".DS_Store"):
-
-            shutil.rmtree(
-                os.path.join(root, d)
-            )
-
-            dirs.remove(d)
-
-    for f in files:
-
-        if f == ".DS_Store":
-
-            os.remove(
-                os.path.join(root, f)
-            )
-
-# --------------------------------------------------
-# Find folder containing index.html
-# --------------------------------------------------
-
-src = tmp
-entries = os.listdir(src)
-
-while (
-    len(entries) == 1
-    and os.path.isdir(
-        os.path.join(src, entries[0])
-    )
-    and not os.path.exists(
+    if not os.path.exists(
         os.path.join(src, "index.html")
-    )
-):
-
-    src = os.path.join(
-        src,
-        entries[0]
-    )
-
-    entries = os.listdir(src)
-
-if not os.path.exists(
-    os.path.join(src, "index.html")
-):
-
-    sys.exit(
-        "index.html not found in ZIP. "
-        "Expected at top level or inside one folder."
-    )
-
-# --------------------------------------------------
-# Remove previous deployment files
-# Only in full deployment mode
-# --------------------------------------------------
-
-if (
-    os.path.exists(MANIFEST)
-    and not PATCH
-):
-
-    with open(
-        MANIFEST,
-        encoding="utf-8"
-    ) as mf:
-
-        previous_files = mf.read().splitlines()
-
-    for line in previous_files:
-
-        line = line.strip()
-
-        if (
-            line
-            and not line.startswith(".github")
-            and os.path.isfile(line)
-        ):
-
-            os.remove(line)
-
-    # Clean empty directories
-    for root, dirs, files in os.walk(
-        ".",
-        topdown=False
     ):
 
-        if (
-            root.startswith("./.git")
-            or root.startswith("./.github")
-            or root == "."
-        ):
-            continue
-
-        if not os.listdir(root):
-            os.rmdir(root)
-
-# --------------------------------------------------
-# Copy new files
-# --------------------------------------------------
-
-new = []
-
-for root, dirs, files in os.walk(src):
-
-    for f in files:
-
-        full = os.path.join(root, f)
-
-        rel = os.path.relpath(
-            full,
-            src
-        ).replace(os.sep, "/")
-
-        if (
-            rel.startswith(".github/")
-            or rel.lower().endswith(".zip")
-            or rel == MANIFEST
-        ):
-            continue
-
-        os.makedirs(
-            os.path.dirname(rel) or ".",
-            exist_ok=True
+        sys.exit(
+            "index.html not found in ZIP."
         )
 
-        shutil.copy2(
-            full,
-            rel
+    # --------------------------------------------------
+    # Remove previous deployed files in full mode
+    # --------------------------------------------------
+
+    if (
+        not PATCH
+        and os.path.exists(MANIFEST)
+    ):
+
+        with open(
+            MANIFEST,
+            encoding="utf-8"
+        ) as manifest_file:
+
+            old_files = manifest_file.read().splitlines()
+
+        for filename in old_files:
+
+            filename = filename.strip()
+
+            if (
+                filename
+                and not filename.startswith(".github/")
+                and os.path.isfile(filename)
+            ):
+
+                os.remove(filename)
+
+        # Remove empty directories
+        for root, dirs, files in os.walk(
+            ".",
+            topdown=False
+        ):
+
+            if (
+                root == "."
+                or root.startswith("./.git")
+                or root.startswith("./.github")
+            ):
+                continue
+
+            if not os.listdir(root):
+                os.rmdir(root)
+
+    # --------------------------------------------------
+    # Copy files from ZIP
+    # --------------------------------------------------
+
+    new_files = []
+
+    for root, dirs, files in os.walk(src):
+
+        for filename in files:
+
+            full_path = os.path.join(
+                root,
+                filename
+            )
+
+            relative_path = os.path.relpath(
+                full_path,
+                src
+            ).replace(os.sep, "/")
+
+            if (
+                relative_path.startswith(".github/")
+                or relative_path.lower().endswith(".zip")
+                or relative_path == MANIFEST
+            ):
+                continue
+
+            os.makedirs(
+                os.path.dirname(relative_path) or ".",
+                exist_ok=True
+            )
+
+            shutil.copy2(
+                full_path,
+                relative_path
+            )
+
+            new_files.append(relative_path)
+
+    # --------------------------------------------------
+    # Update deployment manifest
+    # --------------------------------------------------
+
+    if (
+        PATCH
+        and os.path.exists(MANIFEST)
+    ):
+
+        with open(
+            MANIFEST,
+            encoding="utf-8"
+        ) as manifest_file:
+
+            previous_files = [
+                line.strip()
+                for line in manifest_file.read().splitlines()
+                if line.strip()
+            ]
+
+        new_files = sorted(
+            set(new_files) | set(previous_files)
         )
 
-        new.append(rel)
+    else:
 
-# --------------------------------------------------
-# Update manifest
-# --------------------------------------------------
-
-if (
-    PATCH
-    and os.path.exists(MANIFEST)
-):
+        new_files = sorted(
+            set(new_files)
+        )
 
     with open(
         MANIFEST,
+        "w",
         encoding="utf-8"
-    ) as mf:
+    ) as manifest_file:
 
-        previous = [
-            line.strip()
-            for line in mf.read().splitlines()
-            if line.strip()
-        ]
+        manifest_file.write(
+            "\n".join(new_files) + "\n"
+        )
 
-    new = sorted(
-        set(new) | set(previous)
+    # Delete uploaded ZIP after extraction
+    for uploaded_zip in zips:
+
+        if os.path.exists(uploaded_zip):
+            os.remove(uploaded_zip)
+
+    print(
+        "Prepared",
+        len(new_files),
+        "files."
     )
-
-else:
-
-    new = sorted(
-        set(new)
-    )
-
-with open(
-    MANIFEST,
-    "w",
-    encoding="utf-8"
-) as mf:
-
-    mf.write(
-        "\n".join(new) + "\n"
-    )
-
-# --------------------------------------------------
-# Remove uploaded ZIP
-# --------------------------------------------------
-
-for p in zips:
-
-    if os.path.exists(p):
-        os.remove(p)
-
-print(
-    "Deployment prepared:",
-    len(new),
-    "files"
-)
 
 finally:
 
-shutil.rmtree(
-    tmp,
-    ignore_errors=True
-)
+    shutil.rmtree(
+        tmp,
+        ignore_errors=True
+    )
 
---------------------------------------------------
 
-Commit changes
-
---------------------------------------------------
-
-git(
-"config",
-"user.name",
-"github-actions[bot]"
-)
+# --------------------------------------------------
+# Configure Git identity
+# --------------------------------------------------
 
 git(
-"config",
-"user.email",
-"41898282+github-actions[bot]@users.noreply.github.com"
+    "config",
+    "user.name",
+    "github-actions[bot]"
 )
 
 git(
-"add",
-"-A"
+    "config",
+    "user.email",
+    "41898282+github-actions[bot]@users.noreply.github.com"
 )
 
-commit_result = git(
-"diff",
-"--cached",
-"--quiet",
-check=False
-)
 
-if commit_result.returncode == 0:
+# --------------------------------------------------
+# Create commit
+# --------------------------------------------------
 
-print(
-    "No file changes detected. "
-    "Nothing to commit."
-)
+git("add", "-A")
 
-sys.exit(0)
-
-git(
-"commit",
-"-m",
-"自动解压 zip 并更新游戏文件 [skip ci]"
-)
-
---------------------------------------------------
-
-Synchronize with remote and push safely
-
---------------------------------------------------
-
-branch = current_branch()
-
-print(
-"Synchronizing with remote branch:",
-branch
-)
-
-for attempt in range(
-1,
-MAX_PUSH_RETRIES + 1
-):
-
-print(
-    f"Push attempt {attempt}/{MAX_PUSH_RETRIES}"
-)
-
-# Fetch latest remote commits
-git(
-    "fetch",
-    "origin",
-    branch
-)
-
-# Rebase our commit on top of the newest remote branch.
-# This avoids the non-fast-forward rejection.
-rebase_result = git(
-    "rebase",
-    f"origin/{branch}",
+changes = git(
+    "diff",
+    "--cached",
+    "--quiet",
     check=False
 )
 
-if rebase_result.returncode != 0:
+if changes.returncode == 0:
 
-    print(
-        "Rebase failed. "
-        "A remote change conflicts with this deployment."
-    )
-
-    git(
-        "rebase",
-        "--abort",
-        check=False
-    )
-
-    sys.exit(
-        "Deployment stopped safely. "
-        "No force push was performed."
-    )
-
-# Push
-push_result = git(
-    "push",
-    "origin",
-    f"HEAD:{branch}",
-    check=False
-)
-
-if push_result.returncode == 0:
-
-    print(
-        "Push successful."
-    )
+    print("No changes to commit.")
 
     sys.exit(0)
 
-print(
-    "Push rejected. "
-    "The remote branch may have changed again."
+git(
+    "commit",
+    "-m",
+    "自动解压 ZIP 并更新游戏文件 [skip ci]"
 )
 
-print(
-    push_result.stderr
+
+# --------------------------------------------------
+# Synchronize with GitHub and push
+# --------------------------------------------------
+
+branch = os.environ.get(
+    "GITHUB_REF_NAME",
+    "main"
 )
 
-# Retry only if the remote branch advanced.
-if attempt < MAX_PUSH_RETRIES:
+print("Target branch:", branch)
 
-    time.sleep(
-        attempt * 2
+for attempt in range(1, MAX_RETRIES + 1):
+
+    print(
+        "Push attempt",
+        attempt,
+        "of",
+        MAX_RETRIES
     )
 
-print(
-"Push failed after all retries."
-)
+    # Get latest remote commits
+    git(
+        "fetch",
+        "origin",
+        branch
+    )
+
+    # Rebase local commit on top of latest remote
+    rebase = git(
+        "rebase",
+        "origin/" + branch,
+        check=False
+    )
+
+    if rebase.returncode != 0:
+
+        print("Rebase conflict detected.")
+
+        git(
+            "rebase",
+            "--abort",
+            check=False
+        )
+
+        sys.exit(
+            "Stopped safely. "
+            "Remote changes conflict with this update."
+        )
+
+    # Push without force
+    push = git(
+        "push",
+        "origin",
+        "HEAD:" + branch,
+        check=False
+    )
+
+    if push.returncode == 0:
+
+        print("Push successful.")
+
+        sys.exit(0)
+
+    print("Push rejected. Retrying.")
+
+    print(push.stderr)
+
+    if attempt < MAX_RETRIES:
+
+        time.sleep(attempt * 2)
+
+
+print("Push failed after all retries.")
 
 sys.exit(1)
