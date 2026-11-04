@@ -207,9 +207,10 @@ function cleanOutfit(o) {
   out.scale = Math.max(0.85, Math.min(1.15, Number(o.scale) || 1));
   // [创建面板] 创建人物新增的外观字段（性别 / 发型 / 耳朵 / 套装 / 脸）。不加这几行，别的玩家就看不到你的脸型和性别。
   out.gender = o.gender === "m" ? "m" : "f";
-  out.hairStyle = Math.max(0, Math.min(4, parseInt(o.hairStyle) || 0));
-  out.mhair = Math.max(0, Math.min(1, parseInt(o.mhair) || 0));
-  out.ear = Math.max(0, Math.min(2, parseInt(o.ear) || 0));
+  out.hairStyle = Math.max(0, Math.min(9, parseInt(o.hairStyle) || 0));
+  out.mhair = Math.max(0, Math.min(9, parseInt(o.mhair) || 0));
+  out.ear = Math.max(0, Math.min(6, parseInt(o.ear) || 0));
+  out.shape = Math.max(0, Math.min(11, parseInt(o.shape) || 0));   // [创建面板] 脸型 0~11
   out.set = o.set === "hoodie" ? "hoodie" : null;
   out.face = cleanFace(o.face);
   return out;

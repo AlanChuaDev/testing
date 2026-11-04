@@ -16,12 +16,12 @@
 (function (global) {
 'use strict';
 let G, $, store, closePanels, drawPortrait;
-const { SKIN, HAIRS, DEFAULT_HAIR, TOPS, BOTS, SOCKS, SHOES, CHAR_NAMES, MALE_NAMES, HAIR_NAMES, MHAIR_NAMES, EAR_NAMES, applyOutfit, randomOutfit } = global.Outfit;
+const { SKIN, HAIRS, DEFAULT_HAIR, TOPS, BOTS, SOCKS, SHOES, CHAR_NAMES, MALE_NAMES, HAIR_NAMES, MHAIR_NAMES, EAR_NAMES, SHAPE_NAMES, applyOutfit, randomOutfit } = global.Outfit;
 const pick = a => a[(Math.random() * a.length) | 0];
 /* ---------------- character creator (left: live preview, right: option menu) ---------------- */
 const CR = { open: false, tab: 'base', yaw: .35, zoom: 0, zoomTarget: 0, drag: null, thumbs: new Map() };
-const CR_TABS = [['base', '基础'], ['eye', '眼睛'], ['brow', '眉毛'], ['nose', '鼻子'], ['mouth', '嘴巴'], ['cheek', '脸颊'], ['hair', '发型'], ['ear', '耳朵'], ['cloth', '服装']];
-const CR_FACE_TABS = ['eye', 'brow', 'nose', 'mouth', 'cheek', 'hair', 'ear'];
+const CR_TABS = [['base', '基础'], ['shape', '脸型'], ['eye', '眼睛'], ['brow', '眉毛'], ['nose', '鼻子'], ['mouth', '嘴巴'], ['cheek', '脸颊'], ['hair', '发型'], ['ear', '耳朵'], ['cloth', '服装']];
+const CR_FACE_TABS = ['shape', 'eye', 'brow', 'nose', 'mouth', 'cheek', 'hair', 'ear'];
 function openCreator() {
   if (!G.me) return;
   closePanels(); CR.open = true; $('creator').hidden = false; CR.zoomTarget = CR_FACE_TABS.includes(CR.tab) ? 1 : 0; renderCreator();
@@ -55,6 +55,7 @@ function renderCreator() {
       const h = sec('肤色'); SKIN.forEach((s, i) => { const b = document.createElement('button'); b.className = 'sw' + ((o.skin || 0) === i ? ' on' : ''); b.style.background = `rgb(${251 * s[0] | 0},${217 * s[1] | 0},${196 * s[2] | 0})`; b.onclick = () => { o.skin = i; commit(); }; h.appendChild(b); });
       const p = document.createElement('p'); p.className = 'hint'; p.textContent = '人物身高、头身比对所有玩家固定（标准尺寸），不能调整。'; body.appendChild(p); break;
     }
+    case 'shape': chipsRow(sec('脸型（耳朵和头发会跟着变）'), SHAPE_NAMES, o.shape | 0, i => { o.shape = i; commit(); }); break;
     case 'eye': thumbGrid(sec('眼型'), 'eye', 'eye', FaceGen.EYES); swatches(sec('眼睛颜色'), FaceGen.EYE_COLORS, o.face.eyeColor, c => setFace('eyeColor', c), false, true); thumbGrid(sec('睫毛'), 'eye', 'lash', FaceGen.LASHES); break;
     case 'brow': thumbGrid(sec('眉形'), 'brow', 'brow', FaceGen.BROWS); swatches(sec('眉毛颜色（默认跟随发色）'), ['#2a1a14', '#5b3a29', '#8a5a3a', '#d8b26a', '#c94f6a', '#4a90d9'], o.face.browColor, c => setFace('browColor', c), true, true); break;
     case 'nose': thumbGrid(sec('鼻子'), 'nose', 'nose', FaceGen.NOSES); break;
@@ -67,7 +68,7 @@ function renderCreator() {
       if (male) chipsRow(sec('发型'), MHAIR_NAMES, o.mhair | 0, i => { o.mhair = i; commit(); }); else chipsRow(sec('发型'), HAIR_NAMES, o.hairStyle | 0, i => { o.hairStyle = i; commit(); });
       swatches(sec('发色'), HAIRS, o.hair || DEFAULT_HAIR, c => { o.hair = c; commit(); }, false, true); break;
     }
-    case 'ear': chipsRow(sec('耳朵'), EAR_NAMES, o.ear | 0, i => { o.ear = i; commit(); }); { const p = document.createElement('p'); p.className = 'hint'; p.textContent = '猫耳颜色跟随发色，精灵耳跟随肤色。'; body.appendChild(p); } break;
+    case 'ear': chipsRow(sec('耳朵'), EAR_NAMES, o.ear | 0, i => { o.ear = i; commit(); }); { const p = document.createElement('p'); p.className = 'hint'; p.textContent = '猫耳颜色跟随发色，其他耳朵跟随肤色。'; body.appendChild(p); } break;
     case 'cloth': {
       if (!male) {
         if (G.owned.includes('hoodie')) chipsRow(sec('套装'), ['日常', '蓝色卫衣套装'], o.set === 'hoodie' ? 1 : 0, i => { o.set = i ? 'hoodie' : null; commit(); });

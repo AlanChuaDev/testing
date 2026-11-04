@@ -114,7 +114,7 @@ async function loadModel(url, renderer) {
       const mat = g.materials && p.material != null ? g.materials[p.material] : {}, pbr = mat.pbrMetallicRoughness || {};
       const prim = { node: ni, name: nd.name || ('mesh' + ni), skin: skinned ? nd.skin : -1, count: idx.length, itype: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
         base: pbr.baseColorFactor || [1, 1, 1, 1], tex: pbr.baseColorTexture ? getTex(pbr.baseColorTexture.index) : null, mask: mat.alphaMode === 'MASK', cutoff: mat.alphaCutoff != null ? mat.alphaCutoff : .5, double: !!mat.doubleSided,
-        hidden: !!(nd.extras && nd.extras.defaultHidden), bufs: { pos: buffer(pos.data), nrm: buffer(nrm), col: buffer(col), uv: buffer(uv), J: buffer(J), W: buffer(W), idx: buffer(idx, gl.ELEMENT_ARRAY_BUFFER) } };
+        hidden: !!(nd.extras && nd.extras.defaultHidden), pos0: /^(Head|Ear|Hair)/.test(nd.name || '') ? pos.data : null /* [创建面板] 脸型变形要用 */, bufs: { pos: buffer(pos.data), nrm: buffer(nrm), col: buffer(col), uv: buffer(uv), J: buffer(J), W: buffer(W), idx: buffer(idx, gl.ELEMENT_ARRAY_BUFFER) } };
       m.meshes.push(prim);
     });
   });
@@ -261,13 +261,22 @@ function createRenderer(canvas, opts) {
   const U = {}; ['uBones', 'uVP', 'uModel', 'uOutline', 'uSkinned', 'uTex', 'uHasTex', 'uBase', 'uTint', 'uLight', 'uView', 'uPass', 'uLine', 'uMask', 'uCut', 'uRim', 'uAmb', 'uSunCol', 'uRecol'].forEach(k => U[k] = gl.getUniformLocation(pr, k));
   const r = { gl, canvas, vaos: new WeakMap() };
   r.makeBoneTexture = nJ => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, nJ * 4, 1, 0, gl.RGBA, gl.FLOAT, null); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; };
-  const vao = p => {
-    let v = r.vaos.get(p); if (v) return v;
-    v = gl.createVertexArray(); gl.bindVertexArray(v);
+  const buildVao = (p, posBuf) => {
+    const v = gl.createVertexArray(); gl.bindVertexArray(v);
     const B = p.bufs, att = (loc, buf, size, type, ints) => { gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc); if (ints) gl.vertexAttribIPointer(loc, size, type, 0, 0); else gl.vertexAttribPointer(loc, size, type, false, 0, 0); };
-    att(0, B.pos, 3, gl.FLOAT); att(1, B.nrm, 3, gl.FLOAT); att(2, B.col, 4, gl.FLOAT); att(3, B.uv, 2, gl.FLOAT); att(4, B.J, 4, gl.UNSIGNED_SHORT, true); att(5, B.W, 4, gl.FLOAT);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, B.idx); r.vaos.set(p, v); return v;
+    att(0, posBuf || B.pos, 3, gl.FLOAT); att(1, B.nrm, 3, gl.FLOAT); att(2, B.col, 4, gl.FLOAT); att(3, B.uv, 2, gl.FLOAT); att(4, B.J, 4, gl.UNSIGNED_SHORT, true); att(5, B.W, 4, gl.FLOAT);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, B.idx); return v;
   };
+  const vao = p => { let v = r.vaos.get(p); if (v) return v; v = buildVao(p); r.vaos.set(p, v); return v; };
+  /* [创建面板] inst.posOv[网格名] = 另一份顶点位置（脸型变形），只对这个角色生效；每个角色按需生成自己的 VAO */
+  const vaoFor = (inst, p) => {
+    const ov = inst.posOv && inst.posOv[p.name]; if (!ov) return vao(p);
+    const cache = inst.vaoOv || (inst.vaoOv = {}), e = cache[p.name];
+    if (e && e.buf === ov) return e.vao;
+    if (e) gl.deleteVertexArray(e.vao);
+    const v = buildVao(p, ov); cache[p.name] = { buf: ov, vao: v }; return v;
+  };
+  r.makePosBuffer = data => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); return b; };
   /* camera: { yaw, pitch, halfH (world units seen from centre to top), target:[x,y,z] } */
   r.viewProj = (cam, w, h) => {
     const V = mul(rotX(cam.pitch), mul(rotY(-cam.yaw), trans(-cam.target[0], -cam.target[1], -cam.target[2])));
@@ -315,7 +324,7 @@ function createRenderer(canvas, opts) {
         gl.uniform4fv(U.uBase, p.base); const rc = inst.recolor && inst.recolor[p.name]; gl.uniform4fv(U.uRecol, rc || [0, 0, 0, 0]); const tn = inst.tints && inst.tints[p.name]; gl.uniform3fv(U.uTint, tn || inst.tint); gl.uniform1f(U.uMask, p.mask ? 1 : 0); gl.uniform1f(U.uCut, p.cutoff);
         const tx = (inst.texOv && inst.texOv[p.name]) || p.tex; gl.activeTexture(gl.TEXTURE0); if (tx) gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1f(U.uHasTex, tx ? 1 : 0);   // [创建面板] inst.texOv：单个角色覆盖贴图
         if (p.double) gl.disable(gl.CULL_FACE); else gl.enable(gl.CULL_FACE);
-        gl.bindVertexArray(vao(p)); gl.drawElements(gl.TRIANGLES, p.count, p.itype, 0);
+        gl.bindVertexArray(vaoFor(inst, p)); gl.drawElements(gl.TRIANGLES, p.count, p.itype, 0);
       }
     };
     pass(true); pass(false);
