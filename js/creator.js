@@ -88,7 +88,7 @@ function drawCreatorPreview(dt) {
   const mc = G.R.canvas, k = Math.min(1, mc.width / W, mc.height / H); W = Math.max(32, Math.floor(W * k)); H = Math.max(32, Math.floor(H * k));
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   CR.zoom += (CR.zoomTarget - CR.zoom) * Math.min(1, dt * 7);
-  const z = CR.zoom, halfH = 1.18 + (.36 - 1.18) * z, ty = 1.02 + (1.78 - 1.02) * z;
+  const z = CR.zoom, ph = window.matchMedia('(max-height:520px)').matches, bh = ph ? 1.5 : 1.18, bty = ph ? .93 : 1.02, halfH = bh + (.36 - bh) * z, ty = bty + (1.78 - bty) * z; /* 手机(矮屏)：全身预览人物缩小，头脚都在框内 */
   const old = me.inst.pos.slice(), oy = me.inst.yaw; me.inst.pos = [0, 0, 0]; me.inst.yaw = CR.yaw;
   gl.viewport(0, 0, W, H); gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, W, H); gl.clearColor(.17, .16, .40, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
   const vp = GR.viewProj({ yaw: 0, pitch: 0, halfH, target: [0, ty, 0] }, W, H);
