@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#120e2b">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="星光广场">
 <title>STAR PLAZA · 星光广场</title>
-<script>window.APP_V='20261104-view1-map3'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'"><link rel="stylesheet" href="css/creator.css?v='+window.APP_V+'">'); /* [创建面板] creator.css */</script>
+<script>window.APP_V='20261104-fs1'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'"><link rel="stylesheet" href="css/creator.css?v='+window.APP_V+'">'); /* [创建面板] creator.css */</script>
 </head>
 <body>
 <!-- login / create character -->
@@ -61,6 +62,20 @@
 
   <div id="sceneName"></div>
   <button id="viewBtn">📷 视角：原版</button>
+  <button id="fsBtn" type="button" style="position:absolute;left:calc(10px + var(--sa-l));top:calc(124px + var(--sa-t));padding:4px 11px;border-radius:999px;background:var(--panel);border:1.5px solid var(--line);font-size:12px;font-weight:700;backdrop-filter:blur(6px)" hidden>⛶ 全屏</button>
+  <script>(function(){ /* 全屏按钮：安卓/电脑直接全屏；iPhone Safari 不支持网页全屏，提示「添加到主屏幕」 */
+    var b=document.getElementById('fsBtn'), d=document.documentElement;
+    var standalone=(navigator.standalone===true)||matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+    var canFs=!!(d.requestFullscreen||d.webkitRequestFullscreen), ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    var isFs=function(){return !!(document.fullscreenElement||document.webkitFullscreenElement);};
+    if(standalone||(!canFs&&!ios)) return; b.hidden=false;
+    var sync=function(){b.textContent=isFs()?'⮌ 退出全屏':'⛶ 全屏';};
+    document.addEventListener('fullscreenchange',sync); document.addEventListener('webkitfullscreenchange',sync);
+    b.onclick=function(){
+      if(!canFs){ var t=document.createElement('div'); t.textContent='iPhone：点 Safari 底部「分享」→「添加到主屏幕」，从主屏幕图标打开就是全屏'; t.style.cssText='position:fixed;left:50%;top:20%;transform:translateX(-50%);max-width:80vw;padding:10px 14px;border-radius:12px;background:rgba(18,14,43,.94);color:#fff;font-size:13px;z-index:99999;text-align:center'; document.body.appendChild(t); setTimeout(function(){t.remove();},5000); return; }
+      try{ if(isFs()){(document.exitFullscreen||document.webkitExitFullscreen).call(document);} else {var p=(d.requestFullscreen||d.webkitRequestFullscreen).call(d); try{screen.orientation.lock('landscape').catch(function(){});}catch(e){} if(p&&p.catch)p.catch(function(){});} }catch(e){}
+    };
+  })();</script>
   <div id="banner" hidden></div>
   <div id="lyricBar" hidden></div>
 
