@@ -63,11 +63,9 @@ function makeRoom(R, T, id) {
       gtable(sd * sx, -.3, 3.2, 1.2, IVORY, .5); gtable(sd * (HX - 2.3), -3.2, 1.1, 2.0, IVORY, .5);
       const it = new MB(); for (let k = 0; k < 4; k++) { it.cyl(sd * sx - 1.1 + k * .72, -.3 + (k % 2) * .25 - .1, .58, .86, .07, .05, 6, [1, .95, .9], true); } it.cyl(sd * sx, -.3, .58, 1.0, .09, .07, 8, mul(A2, [.9, .9, .9]), true); add(it, {}); });
     const rp = new MB(); [-1, 1].forEach(sd => pool(rp, sd * sx, -.3, 4, mul(A1, [.8, .8, .8]), .036)); add(rp, glowMat(lit(.3)));
-    /* 点歌台 */
-    const kx = -(HX - 3.2), kz = ZF - 2.5, kb = new MB(), kg = new MB(); kb.box(kx - .35, 0, kz - .3, kx + .35, 1.0, kz + .3, [.12, .1, .14]); kb.box(kx - .4, 1.0, kz - .35, kx + .4, 1.06, kz + .35, TRIM);
-    const ks = sgn('点歌 · SONGS', { w: 384, h: 140, fs: 54, bg: '#10061a', fg: '#ffe0f6', border: '#ff4fc3' }), km = new MB(); km.quad([kx - .5, 1.05, kz + .12], [kx + .5, 1.05, kz + .12], [kx + .5, 1.75, kz - .14], [kx - .5, 1.75, kz - .14], [0, .5, .9], [0, 1, 1, 0], [1, 1, 1]); add(kb, {}); add(km, { tex: ks.tex, em: ks.em, emDay: .5, emNight: .85 });
-    halo(kg, kx, 1.4, kz, 1.2, [1, .5, .85]); add(kg, glowMat(lit(.25))); obs(kx - .45, kz - .4, kx + .45, kz + .4);
-    S.hotspots.push({ id: 'songs', x: kx, z: kz + 1.1, r: 1.7, label: '点歌台', color: [1, .5, .85] }); }
+    /* 点歌机：VIP(2F)=复古点唱机，普通(3F)=玻璃触屏点歌柱 */
+    const kx = -(HX - 3.2), kz = ZF - 2.5; occ(() => (t2 ? G.Kiosk.jukebox : G.Kiosk.pillar)(K, kx, kz));
+    S.hotspots.push({ id: 'songs', x: kx, z: kz + 1.5, r: 1.8, label: '点歌台', color: [1, .5, .85] }); }
   /* ---- 灯：吊灯 + 迪斯科球 ---- */
   chand(0, 8.6, t2 ? -1 : -.5, t2 ? 1.5 : 1.1, mul(A1, [1, 1, 1]));
   if (t2) { chand(-6, 8.4, 3, .8); chand(6, 8.4, 3, .8); }

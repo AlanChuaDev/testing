@@ -60,6 +60,7 @@ css/creator.css
 css/style.css
 index.html
 js/auth.js
+js/bigshops.js
 js/boutique.js
 js/creator.js
 js/face.js
@@ -83,6 +84,7 @@ js/scene-klcc.js
 js/scene_beach.js
 js/scene_funfair.js
 js/scenes.js
+js/songkiosk.js
 js/songs.js
 js/team.js
 js/world.js

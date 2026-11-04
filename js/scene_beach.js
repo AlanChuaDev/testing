@@ -236,7 +236,7 @@ function makeBeach(R, T) {
     add(mb, {}); const sg = T.sign('回到星光广场 →', { w: 1024, h: 170, fs: 90, bg: '#10243a', fg: '#c8fff0', border: '#52e0b5' });
     const sb = new MB(); sb.quad([gx - 2.6, 2.7, gz + .32], [gx + 2.6, 2.7, gz + .32], [gx + 2.6, 4.1, gz + .32], [gx - 2.6, 4.1, gz + .32], [0, 0, 1], [0, 0, 1, 1], [1, 1, 1]); sb.quad([gx + 2.6, 2.7, gz - .32], [gx - 2.6, 2.7, gz - .32], [gx - 2.6, 4.1, gz - .32], [gx + 2.6, 4.1, gz - .32], [0, 0, -1], [0, 0, 1, 1], [1, 1, 1]); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.7 });
     em.box(gx - 2.7, 4.1, gz - .2, gx + 2.7, 4.2, gz + .2, [1, 1, 1]); add(em, emS('#52e0b5', .8, 2.2)); obs(gx - 3.3, gz - .4, gx - 2.6, gz + .4); obs(gx + 2.6, gz - .4, gx + 3.3, gz + .4);
-    S.portals.push({ id: 'plaza', x: gx, z: gz - .9, r: 1.9, label: '回到星光广场', color: [.4, 1, .7], spawn: [0, 12.5] }); S.exitPortal = S.portals[0]; }
+    S.portals.push({ id: 'plaza', x: gx, z: gz - .9, r: 1.9, label: '回到星光广场', color: [.4, 1, .7], spawn: [0, 17] }); S.exitPortal = S.portals[0]; }
 
   /* ---------- 码头 ---------- */
   { const mb = new MB(), pst = new MB(), rail = new MB(), lampH = new MB(), lampG = new MB(), cx = PIERX, hw = 1.2, y = .5;

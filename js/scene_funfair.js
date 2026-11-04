@@ -312,7 +312,7 @@ function makeFunfair(R, T) {
     mb.box(gx - 3.4, 0, gz - .3, gx - 2.9, 3.6, gz + .3, [.95, .35, .5]); mb.box(gx + 2.9, 0, gz - .3, gx + 3.4, 3.6, gz + .3, [.95, .35, .5]); mb.box(gx - 3.7, 3.6, gz - .4, gx + 3.7, 4.0, gz + .4, [.98, .8, .25]); add(mb, {});
     const sg = T.sign('回到星光广场', { w: 1024, h: 170, fs: 90, bg: '#10243a', fg: '#c8fff0', border: '#52e0b5' }), sb = new MB(); sb.quad([gx - 2.8, 2.0, gz + .32], [gx + 2.8, 2.0, gz + .32], [gx + 2.8, 3.4, gz + .32], [gx - 2.8, 3.4, gz + .32], [0, 0, 1], [0, 0, 1, 1], [1, 1, 1]); sb.quad([gx + 2.8, 2.0, gz - .32], [gx - 2.8, 2.0, gz - .32], [gx - 2.8, 3.4, gz - .32], [gx + 2.8, 3.4, gz - .32], [0, 0, -1], [0, 0, 1, 1], [1, 1, 1]); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.7 });
     em.box(gx - 2.9, 3.4, gz - .2, gx + 2.9, 3.5, gz + .2, [1, 1, 1]); add(em, emS('#52e0b5', .8, 2.2)); obs(gx - 3.5, gz - .4, gx - 2.8, gz + .4); obs(gx + 2.8, gz - .4, gx + 3.5, gz + .4);
-    S.portals.push({ id: 'plaza', x: gx, z: gz - .9, r: 2.0, label: '回到星光广场', color: [.4, 1, .7], spawn: [0, 12.5], icon: 12, iy: 4.8 }); S.exitPortal = S.portals[0];
+    S.portals.push({ id: 'plaza', x: gx, z: gz - .9, r: 2.0, label: '回到星光广场', color: [.4, 1, .7], spawn: [0, 17], icon: 12, iy: 4.8 }); S.exitPortal = S.portals[0];
     occ1(n0); }
 
   /* ---------- 灯柱 / 长椅 / 彩旗（沿路径两侧规则排列，避开互动圈 / 障碍 / 道路中央） ---------- */

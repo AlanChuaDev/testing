@@ -162,7 +162,7 @@ function makeBoutiqueV2(R, T) {
   { const ex = new MB(); [-2.7, 2.7].forEach(x => { ex.cyl(x, 12.4, 0, 3.6, .3, .26, 12, IVORY, true); ex.sphere(x, 3.9, 12.4, .3, .3, .3, GOLD, 8); ex.cyl(x, 12.4, 3.6, 5.8, .14, .14, 8, IVORY, true); }); occ(() => add(ex, {}));
     const es = sgn('出口 EXIT · 回到星光广场', { w: 768, h: 120, fs: 56, border: '#7dffb0' }), eb = new MB(); eb.quad([-2.4, 4.6, 12.35], [2.4, 4.6, 12.35], [2.4, 5.5, 12.35], [-2.4, 5.5, 12.35], [0, 0, 1], [0, 0, 1, 1], [1, 1, 1]); add(eb, { tex: es.tex, em: es.em, emDay: .6, emNight: 1.6 });
     const gl = new MB(); pool(gl, 0, 11, 3.2, [.4, 1, .6], .036); add(gl, { tex: T.glow, mode: 2, glow: night(.6) });
-    S.portals.push({ id: 'plaza', x: 0, z: 10.8, r: 1.9, label: '回到星光广场', color: [.4, 1, .6], spawn: [-20.7, -8.4] }); }
+    S.portals.push({ id: 'plaza', x: 0, z: 10.8, r: 1.9, label: '回到星光广场', color: [.4, 1, .6], spawn: [-31.05, -17.15] }); }
 
   S.bounds = { x0: -17, x1: 17, z0: -15, z1: 13 };
   S.spawn = [0, 9];

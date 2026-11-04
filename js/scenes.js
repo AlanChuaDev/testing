@@ -297,7 +297,7 @@ function makeKTV(R, T) {
   // exit door
   { const mb = new MB(); mb.box(-16.05, 0, 4.8, -15.95, 3.4, 7.2, [1, 1, 1]); add(mb, M.emSolid('#7dffb0', 1, 2.4)); const gl = new MB(); pool(gl, -14.4, 6, 3, [.4, 1, .6], .03); add(gl, { tex: T.glow, mode: 2, glow: .6 });
     const sg = T.sign('EXIT 出口', { w: 256, h: 80, fs: 44, bg: '#06261a', fg: '#aaffd0', border: '#7dffb0' }); const sb = new MB(); sb.quad([-15.9, 3.5, 6.6], [-15.9, 3.5, 5.4], [-15.9, 4.2, 5.4], [-15.9, 4.2, 6.6], [1, 0, 0], [0, 0, 1, 1], [1, 1, 1]); add(sb, { tex: sg.tex, em: sg.em, emDay: 1, emNight: 2 });
-    S.portals.push({ id: 'plaza', x: -14.2, z: 6, r: 1.7, label: '回到星光广场', color: [.4, 1, .6], spawn: [20.7, -8.4] }); }
+    S.portals.push({ id: 'plaza', x: -14.2, z: 6, r: 1.7, label: '回到星光广场', color: [.4, 1, .6], spawn: [31.05, -17.15] }); }
   // disco-ball light pools on the floor
   { const gl = new MB(); [[8, 7, [1, .4, .8]], [-6, 6, [.4, .8, 1]], [2, 2, [1, .8, .4]], [-3, 9, [.7, .5, 1]]].forEach(([x, z, c]) => pool(gl, x, z, 3.6, c, .03)); add(gl, { tex: T.glow, mode: 2, glow: .3 }); }
   S.bounds = { x0: X0 + 1, x1: X1 - 1, z0: Z0 + .8, z1: Z1 - .8 }; S.spawn = [-12.2, 6];
