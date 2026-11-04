@@ -47,3 +47,7 @@
   #cZoom{top:6px;left:6px}
   #cZoom button{padding:4px 8px;font-size:10px}
 }
+
+/* 新账号：创建面板里的昵称输入框 */
+#cBody .cName{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:1.5px solid rgba(164,174,255,.45);background:#ffffff14;color:#fff;font-size:16px;font-weight:700}
+#cBody .cName:focus{outline:none;border-color:#ff7ad1}

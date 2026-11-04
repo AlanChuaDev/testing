@@ -631,7 +631,7 @@ async function boot() {
     G.T.coin = G.R.paint(64, 64, g => { const gr = g.createRadialGradient(24, 22, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(.6, '#f4b415'); gr.addColorStop(1, '#a86a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = '#7a4f00'; g.lineWidth = 3; g.stroke(); g.fillStyle = '#b57800'; g.font = '800 30px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('★', 32, 34); }, { clamp: true });
     G.T.coinEm = G.R.paint(64, 64, g => { g.fillStyle = '#4a3000'; g.fillRect(0, 0, 64, 64); }, { clamp: true });
     text.textContent = '加载角色模型…';
-    let buf; if (window.GLB64) { const s = atob(window.GLB64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); buf = u.buffer; } else buf = await (await fetch('assets/girl.glb')).arrayBuffer();
+    let buf; if (window.GLB64) { const s = atob(window.GLB64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); buf = u.buffer; } else { buf = await (window.GLB_P || Promise.resolve(null)); if (!buf) buf = await (await fetch('assets/girl.glb')).arrayBuffer(); }
     G.model = await GLBChar.loadModel(buf, G.GR); GLBChar.addActions(G.model);
     const saved = store.get('outfit', null); G.me = makeEntity(0, 2.5, (window.Profile && Profile.name) || '我', Object.assign({}, DEFAULT_OUTFIT, saved || {}), true);
     { const st = Scenes.PLAZA_STYLES[G.style] || Scenes.PLAZA_STYLES.cozy; G.hour = QS.get('t') ? parseFloat(QS.get('t')) : st.hour; if (QS.get('t')) G.timeMode = 'x'; }
@@ -657,8 +657,9 @@ async function boot() {
     };
     requestAnimationFrame(frame);
     G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
-    if (window.Net) Net.start(G);
-    if (store.get('new_char', false)) { store.set('new_char', false); setTimeout(() => Creator.open(), 600); }   // [创建面板] 新建角色后第一次进游戏：自动弹出创建人物面板
+    // 新账号：先在创建面板里取名字 + 捏人，点「完成」后才连服务器（这样服务器收到的就是正式昵称）
+    if (store.get('new_char', false) || !(window.Profile && Profile.name)) Creator.open({ newChar: true, onDone: () => { if (window.Net) Net.start(G); } });
+    else { if (window.Net) Net.start(G); if (store.get('open_creator', false)) { store.set('open_creator', false); setTimeout(() => Creator.open(), 300); } }   // 「修改角色」：进游戏后直接打开创建面板
   } catch (err) { console.error(err); text.textContent = '加载失败：' + err.message + '（需要支持 WebGL2 的浏览器）'; }
 }
 (window.loginReady || Promise.resolve()).then(boot);

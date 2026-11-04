@@ -19,14 +19,27 @@ let G, $, store, closePanels, drawPortrait;
 const { SKIN, HAIRS, DEFAULT_HAIR, TOPS, BOTS, SOCKS, SHOES, CHAR_NAMES, MALE_NAMES, HAIR_NAMES, MHAIR_NAMES, EAR_NAMES, SHAPE_NAMES, applyOutfit, randomOutfit } = global.Outfit;
 const pick = a => a[(Math.random() * a.length) | 0];
 /* ---------------- character creator (left: live preview, right: option menu) ---------------- */
-const CR = { open: false, tab: 'base', yaw: .35, zoom: 0, zoomTarget: 0, drag: null, thumbs: new Map() };
+const CR = { isNew: false, name: '', onDone: null, open: false, tab: 'base', yaw: .35, zoom: 0, zoomTarget: 0, drag: null, thumbs: new Map() };
 const CR_TABS = [['base', '基础'], ['shape', '脸型'], ['eye', '眼睛'], ['brow', '眉毛'], ['nose', '鼻子'], ['mouth', '嘴巴'], ['cheek', '脸颊'], ['hair', '发型'], ['ear', '耳朵'], ['cloth', '服装']];
 const CR_FACE_TABS = ['shape', 'eye', 'brow', 'nose', 'mouth', 'cheek', 'hair', 'ear'];
-function openCreator() {
+function cleanName(v) { return String(v || '').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 12); }
+function cToast(t) { if (G.api && G.api.toast) G.api.toast(t, 2200); }
+/* openCreator({ newChar:true, onDone }) = 新账号：面板里多一个「昵称」输入框，没填名字不能点完成 */
+function openCreator(opts) {
   if (!G.me) return;
+  opts = opts || {}; CR.isNew = !!opts.newChar; CR.onDone = opts.onDone || null;
+  if (CR.isNew) { CR.tab = 'base'; CR.name = cleanName(window.Profile && Profile.name); }
   closePanels(); CR.open = true; $('creator').hidden = false; CR.zoomTarget = CR_FACE_TABS.includes(CR.tab) ? 1 : 0; renderCreator();
 }
-function closeCreator() { CR.open = false; $('creator').hidden = true; store.set('outfit', G.me.outfit); drawPortrait(); }
+function closeCreator() {
+  if (CR.isNew) {
+    const nm = cleanName(CR.name);
+    if (!nm) { CR.tab = 'base'; CR.zoomTarget = 0; renderCreator(); cToast('请先给角色起个名字'); const i = $('cName'); if (i) i.focus(); return; }
+    window.Profile = window.Profile || {}; Profile.name = nm; store.set('profile', Profile); G.me.name = nm;   // 昵称保存在本机，之后连服务器就用这个名字
+  }
+  CR.open = false; $('creator').hidden = true; store.set('outfit', G.me.outfit); drawPortrait();
+  if (CR.isNew) { CR.isNew = false; store.set('new_char', false); const cb = CR.onDone; CR.onDone = null; if (cb) cb(); }
+}
 function renderCreator() {
   const o = G.me.outfit; o.face = FaceGen.normalize(o.face);
   const tabs = $('cTabs'), body = $('cBody'), scroll = body.scrollTop;
@@ -51,6 +64,10 @@ function renderCreator() {
   const male = o.gender === 'm';
   switch (CR.tab) {
     case 'base': {
+      if (CR.isNew) {
+        sec('昵称（最多 12 个字）'); const i = document.createElement('input'); i.id = 'cName'; i.className = 'cName'; i.type = 'text'; i.maxLength = 12; i.placeholder = '给你的角色起个名字'; i.autocomplete = 'off'; i.value = CR.name;
+        i.oninput = () => { CR.name = i.value; }; i.addEventListener('keydown', e => { if (e.key === 'Enter') i.blur(); }); body.appendChild(i);
+      }
       chipsRow(sec('性别'), ['女生', '男生'], male ? 1 : 0, i => { o.gender = i ? 'm' : 'f'; commit(); });
       const h = sec('肤色'); SKIN.forEach((s, i) => { const b = document.createElement('button'); b.className = 'sw' + ((o.skin || 0) === i ? ' on' : ''); b.style.background = `rgb(${251 * s[0] | 0},${217 * s[1] | 0},${196 * s[2] | 0})`; b.onclick = () => { o.skin = i; commit(); }; h.appendChild(b); });
       const p = document.createElement('p'); p.className = 'hint'; p.textContent = '人物身高、头身比对所有玩家固定（标准尺寸），不能调整。'; body.appendChild(p); break;
@@ -88,13 +105,17 @@ function drawCreatorPreview(dt) {
   const mc = G.R.canvas, k = Math.min(1, mc.width / W, mc.height / H); W = Math.max(32, Math.floor(W * k)); H = Math.max(32, Math.floor(H * k));
   if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   CR.zoom += (CR.zoomTarget - CR.zoom) * Math.min(1, dt * 7);
-  const z = CR.zoom, ph = window.matchMedia('(max-height:520px)').matches, bh = ph ? 1.5 : 1.18, bty = ph ? .93 : 1.02, halfH = bh + (.36 - bh) * z, ty = bty + (1.78 - bty) * z; /* 手机(矮屏)：全身预览人物缩小，头脚都在框内 */
-  const old = me.inst.pos.slice(), oy = me.inst.yaw; me.inst.pos = [0, 0, 0]; me.inst.yaw = CR.yaw;
+  /* 预览用固定人物尺寸（游戏里手机横屏会把人物放大 1.3 倍，预览不能跟着放大），镜头按「人物高度」自动取景：
+     不管什么手机 / 平板 / 电脑，头顶和脚底都完整在框内（脚底下多留一点给「左右拖动旋转人物」那行字）。 */
+  const os = me.inst.scale, SC = 1.4 * ((me.outfit && me.outfit.scale) || 1), CH = 1.674 * SC;
+  const topY = CH + .16, botY = -.3, bh = (topY - botY) / 2, bty = (topY + botY) / 2;
+  const z = CR.zoom, halfH = bh + (.36 - bh) * z, ty = bty + (1.78 - bty) * z;
+  const old = me.inst.pos.slice(), oy = me.inst.yaw; me.inst.pos = [0, 0, 0]; me.inst.yaw = CR.yaw; me.inst.scale = SC;
   gl.viewport(0, 0, W, H); gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, W, H); gl.clearColor(.17, .16, .40, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
   const vp = GR.viewProj({ yaw: 0, pitch: 0, halfH, target: [0, ty, 0] }, W, H);
   GR.draw(me.inst, vp, { outline: Math.max(.002, 2 * halfH / H * 1.7), amb: [.66, .64, .80], sun: [.46, .42, .26], line: [.23, .14, .17], light: [-.3, .5, 1], view: [0, 0, 1] });
   const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, W, H); ctx.drawImage(mc, 0, mc.height - H, W, H, 0, 0, W, H);
-  gl.disable(gl.SCISSOR_TEST); me.inst.pos = old; me.inst.yaw = oy;
+  gl.disable(gl.SCISSOR_TEST); me.inst.pos = old; me.inst.yaw = oy; me.inst.scale = os;
 }
 function bindCreator() {
   const cv = $('cPrev');
@@ -108,6 +129,6 @@ function bindCreator() {
 }
 global.Creator = {
   init: c => { G = c.G; $ = c.$; store = c.store; closePanels = c.closePanels; drawPortrait = c.drawPortrait; },
-  open: openCreator, close: closeCreator, isOpen: () => CR.open, drawPreview: drawCreatorPreview, bind: bindCreator, render: renderCreator,
+  open: openCreator, close: closeCreator, isNew: () => CR.isNew, isOpen: () => CR.open, drawPreview: drawCreatorPreview, bind: bindCreator, render: renderCreator,
 };
 })(window);
