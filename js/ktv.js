@@ -181,7 +181,7 @@ function makeLobby(R, T) {
   { const ex = new MB(); [-2.7, 2.7].forEach(x => { ex.cyl(x, 12.4, 0, 3.6, .3, .26, 12, GOLD, true); ex.sphere(x, 3.9, 12.4, .3, .3, .3, [1, .85, .5], 8); ex.cyl(x, 12.4, 3.6, 5.8, .14, .14, 8, GOLD, true); }); occ(() => add(ex, {}));
     addSign('出口 EXIT · 回到星光广场', { w: 768, h: 120, fs: 56, border: '#7dffb0', fg: '#d8ffe8' }, -2.4, 2.4, 4.6, 5.5, 12.35, 1.6);
     const gl = new MB(); pool(gl, 0, 11, 3.2, [.4, 1, .6], .036); add(gl, glowMat(night(.6)));
-    S.portals.push({ id: 'plaza', x: 0, z: 10.8, r: 1.9, label: '回到星光广场', color: [.4, 1, .6], spawn: [20.7, -8.4] }); }
+    S.portals.push({ id: 'plaza', x: 0, z: 10.8, r: 1.9, label: '回到星光广场', color: [.4, 1, .6], spawn: [31.05, -17.15] }); }
   S.heightAt = () => 0; S.bounds = { x0: -17, x1: 17, z0: -15, z1: 13 }; S.spawn = [0, 9];
   S.camera = { dist: 27, pitch: .54, fov: .74, clampX: [-6, 6], clampZ: [-11, 5], lead: 4 }; S.cameraWide = { dist: 26, pitch: .17, fov: 1.05 };
   S.npcRect = { x0: -14, x1: 14, z0: -6, z1: 11 }; S.npcN = 12;
