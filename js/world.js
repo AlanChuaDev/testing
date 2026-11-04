@@ -261,7 +261,7 @@ class Renderer {
     gl.uniform1f(u.uEmDay, m.emDay); gl.uniform1f(u.uEmNight, m.emNight); gl.uniform1f(u.uMode, m.mode); const fd = b.fade == null ? 1 : b.fade; gl.uniform1f(u.uFade, fd);
     const gs = typeof m.glow === 'function' ? m.glow(this.env) : m.glow; gl.uniform1f(u.uGlow, gs * (glowScale == null ? 1 : glowScale));
     gl.disable(gl.CULL_FACE);
-    if (m.mode === 2) { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false); }
+    if (m.mode === 2) { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-4, -4); }   // 光晕/地面光斑与地毯同高时的闪烁(z-fighting)：加深度偏移让发光层稳定盖在上面
     else if (m.mode === 3) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1, -1); }
     else if (fd < .995) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); }
     else { gl.disable(gl.BLEND); gl.depthMask(true); }

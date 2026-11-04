@@ -227,6 +227,21 @@ function makePlazaV3(R, T, styleName) {
     AZ.forEach(z => BX.forEach(x => { bench(x, z, 'n'); bench(-x, z, 'n'); }));
     const car = new MB(); car.floor(-1.1, SZ1 + DZS + STEPD + .1, 1.1, AZ[2] + 1.0, .03, [.62, .1, .2]); car.floor(-1.1, SZ1 + DZS + STEPD + .1, -.95, AZ[2] + 1.0, .035, [.93, .76, .36]); car.floor(.95, SZ1 + DZS + STEPD + .1, 1.1, AZ[2] + 1.0, .035, [.93, .76, .36]); add(car, {}); }
 
+  /* ---------- 舞台两侧后方花园（放大后的空地）：花坛 + 树 + 长椅 + 路灯 ---------- */
+  [-1, 1].forEach(sd => { const xc = sd * 17.4, r = rnd(60 + sd + 2), L = ST.leaf, pl = new MB(), gr = new MB(), fl = new MB(), tr = new MB(), lf = new MB(), lp = new MB(), lh = new MB(), hl = new MB(), pw = new MB();
+    pl.box(xc - 3.9, 0, -20.7, xc + 3.9, .5, -16.5, [.82, .78, .72]); pl.box(xc - 3.9, .5, -20.7, xc + 3.9, .56, -16.5, [.9, .86, .8]);
+    gr.box(xc - 3.65, .56, -20.45, xc + 3.65, .62, -16.75, mul([.3, .62, .34], L));
+    for (let i = 0; i < 70; i++) { const px = xc + (r() * 2 - 1) * 3.4, pz = -18.6 + (r() * 2 - 1) * 1.9; fl.sphere(px, .74 + r() * .2, pz, .17, .15, .17, mul([.3, .62, .34], L), 4); if (r() < .7) fl.sphere(px, .92 + r() * .2, pz, .11, .1, .11, hex(ST.flowers[(r() * ST.flowers.length) | 0]), 4); }
+    [-2.5, 0, 2.5].forEach((dx, i) => { const tx = xc + dx, tz = -18.6 + (i % 2 ? .5 : -.4), th = 3.6 + (i === 1 ? .9 : 0);
+      tr.cyl(tx, tz, .6, th, .2, .14, 7, [.5, .38, .28], false);
+      [[0, th + .2, 0, 1.25], [.55, th - .2, .3, .9], [-.55, th - .35, -.25, .9]].forEach(([ox, oy, oz, rr]) => lf.sphere(tx + ox, oy, tz + oz, rr, rr * .85, rr, mul([.26 + r() * .06, .62, .3], L), 7));
+      for (let k = 0; k < 6; k++) { const a = k * 1.05, bx = tx + Math.cos(a) * 1.0, bz = tz + Math.sin(a) * 1.0; pw.sphere(bx, th + .1 + (k % 2) * .4, bz, .06, .06, .06, [1, 1, 1], 4); if (k % 2) halo(hl, bx, th + .1, bz, .55, [1, .85, .5]); }
+      obs(tx - .3, tz - .3, tx + .3, tz + .3); });
+    obs(xc - 3.9, -20.8, xc + 3.9, -16.4);
+    [-4.7, 4.7].forEach(dx => { const lx = xc + dx, lz = -15.2; lp.cyl(lx, lz, 0, 4.4, .09, .06, 8, [.22, .2, .32]); lp.cyl(lx, lz, 0, .4, .22, .15, 8, [.22, .2, .32]); lh.sphere(lx, 4.7, lz, .3, .3, .3, [1, 1, 1], 8); halo(hl, lx, 4.7, lz, 3.2, [1, .8, .48]); pool(hl, lx, lz, 3.4, [1, .78, .45]); obs(lx - .2, lz - .2, lx + .2, lz + .2); });
+    occ(() => { add(pl, {}); add(tr, {}); add(lf, {}); add(lp, {}); add(lh, emMat([1, .94, .78], .35, 1.8)); }); add(gr, {}); add(fl, {}); add(pw, emMat([1, .92, .6], .3, 1.8)); add(hl, { tex: T.glow, mode: 2, glow: night(.55) });
+    [-2, 2].forEach(dx => bench(xc + dx, -14.6, 'n')); });
+
   /* pavilions with tables */
   const pavilion = (cx, cz, label, wallCol) => {
     const pw = 3.2, pd = 2.6, p = new MB();
