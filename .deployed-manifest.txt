@@ -65,6 +65,7 @@ js/boutique.js
 js/creator.js
 js/face.js
 js/firebase-config.js
+js/floorlift.js
 js/game.js
 js/glbchar.js
 js/gm.js
