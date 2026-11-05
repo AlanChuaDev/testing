@@ -34,7 +34,13 @@ $('lgNew').onclick = () => { lsSet('sc_open_creator', true); enter(); };   // �
 
 /* ---------- 登录门槛：必须用 ID+密码 或 Google 登录，才能进入游戏 ---------- */
 let authOK = false, authMode = 'in', authBusy = false;
-const afterAuth = () => (profile && profile.name) ? show('welcome') : startNew();
+const afterAuth = () => {
+  if (window.Auth && !Auth.anon && Auth.displayName && (!profile || profile.name !== Auth.displayName)) {   // 账号里有昵称：以账号为准（换设备 / 换账号都不用重新起名）
+    profile = Object.assign({ uid: (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + Math.random().toString(16).slice(2) }, profile || {}, { name: Auth.displayName });
+    lsSet('sc_profile', profile);
+  }
+  return (profile && profile.name) ? show('welcome') : startNew();
+};
 const authErr = t => { $('lgAuthErr').textContent = t || ''; };
 function setAuthMode(m) {
   authMode = m; authErr('');

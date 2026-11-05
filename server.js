@@ -218,6 +218,14 @@ function cleanOutfit(o) {
   out.face = cleanFace(o.face);
   return out;
 }
+const cleanOwned = (a) => (Array.isArray(a) ? a : []).map((x) => String(x)).filter((x) => /^[a-z0-9_]{1,20}$/.test(x)).slice(0, 20);
+function saveLook(ws, outfit, owned) { // 外观绑定账号：存进 Firestore looks/{pub}（登录用户才存，改动 2 秒后合并写一次）
+  if (!ws.authed || !ws.pub) return;
+  const o = cleanOutfit(outfit), ow = owned === undefined ? (ws.look ? ws.look.owned : []) : cleanOwned(owned);
+  ws.look = { outfit: o, owned: ow };
+  clearTimeout(ws.lookT);
+  ws.lookT = setTimeout(() => { S.store.set("looks", ws.pub, { outfit: ws.look.outfit, owned: ws.look.owned, at: Date.now() }).catch((e) => console.warn("look save failed:", e.message)); }, 2000);
+}
 function num(v, d = 0) {
   v = Number(v);
   return Number.isFinite(v) ? v : d;
@@ -477,6 +485,7 @@ wss.on("connection", (ws) => {
           byPubWs.set(ws.pub, ws);
           send(ws, { type: "me_profile", profile: S.publicMe(prof), acct: ws.acct });
           await pushFriends(ws.pub); presence(ws);
+          try { const lk = await S.store.get("looks", ws.pub); ws.look = lk && lk.outfit ? { outfit: cleanOutfit(lk.outfit), owned: cleanOwned(lk.owned) } : null; send(ws, { type: "me_look", has: !!ws.look, outfit: ws.look ? ws.look.outfit : null, owned: ws.look ? ws.look.owned : [] }); } catch (e) { console.warn("look load failed:", e.message); }
           if (W) { try { const wv = await W.view(ws.pub); ws.cos = wv.equip; send(ws, Object.assign({ type: "wallet" }, wv)); } catch (e) { console.warn("wallet load failed:", e.message); } }
         } catch (e) { console.error("account load failed:", e.message); ws.authed = false; ws.name = cleanName(m.name); ws.blocks = new Set(); send(ws, { type: "auth_fail", message: "账号服务暂时不可用，已作为游客进入" }); }
       }
@@ -662,7 +671,8 @@ wss.on("connection", (ws) => {
       if (!rooms.has(room)) rooms.set(room, new Map());
       const players = rooms.get(room);
       if (!ws.authed) ws.name = cleanName(m.name);
-      ws.info = { name: ws.name, outfit: cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM, cos: ws.cos || null };
+      if (ws.authed && !ws.look && m.hasLocal) saveLook(ws, m.outfit, m.owned);   // 账号还没存过外观：把这台设备上的存上去
+      ws.info = { name: ws.name, outfit: (ws.authed && ws.look) ? ws.look.outfit : cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM, cos: ws.cos || null };   // 账号里存过外观就以账号为准
       // 告诉新玩家：房间里已有的人
       for (const [pid, p] of players.entries()) {
         if (p.ws.gmInvisible && !ws.isGM) continue;
@@ -685,6 +695,7 @@ wss.on("connection", (ws) => {
       const p = rooms.get(ws.room)?.get(ws.playerId);
       if (!p) return;
       p.info = ws.info = { name: p.info.name, outfit: cleanOutfit(m.outfit), pub: ws.pub, isGM: !!ws.isGM, cos: ws.cos || null };
+      saveLook(ws, m.outfit, m.owned);
       sendToRoom(ws.room, { type: "outfit", playerId: ws.playerId, outfit: p.info.outfit }, ws);
       return;
     }

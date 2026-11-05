@@ -96,8 +96,8 @@ function joinRoom() {
   if (joinedRoom === wantRoom) return;
   joinedRoom = wantRoom; inRoom = false;
   const P = window.Profile || {};
-  sendRaw({ type: 'join', room: wantRoom, name: P.name || '玩家', outfit: G.me.outfit });
-  lastOutfit = JSON.stringify(G.me.outfit); lastSent = '';
+  sendRaw({ type: 'join', room: wantRoom, name: P.name || '玩家', outfit: G.me.outfit, owned: G.owned, hasLocal: (() => { try { return localStorage.getItem('sc_outfit') != null; } catch (e) { return false; } })() });
+  lastOutfit = JSON.stringify(G.me.outfit) + '|' + JSON.stringify(G.owned || []); lastSent = '';
 }
 
 /* ================= 消息处理 ================= */
@@ -198,8 +198,8 @@ function pushState() {
 }
 function watchOutfit() {
   if (!G || !G.me) return;
-  const s = JSON.stringify(G.me.outfit);
-  if (s !== lastOutfit) { lastOutfit = s; sendRaw({ type: 'outfit', outfit: G.me.outfit }); }
+  const s = JSON.stringify(G.me.outfit) + '|' + JSON.stringify(G.owned || []);
+  if (s !== lastOutfit) { lastOutfit = s; sendRaw({ type: 'outfit', outfit: G.me.outfit, owned: G.owned }); }
 }
 
 /* ================= 聊天 ================= */

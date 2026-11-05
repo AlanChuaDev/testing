@@ -52,6 +52,8 @@ window.Auth = {
   init, getToken, err,
   get ready() { return ready; },
   get email() { const u = user(); return (u && u.email) || ''; },
+  get displayName() { const u = user(); return (u && u.displayName) || ''; },   // 账号昵称（存在 Firebase 账号上，换设备登录不用再起名字）
+  setDisplayName(n) { const u = user(); if (u && n && u.displayName !== n) u.updateProfile({ displayName: n }).catch(() => {}); },
   get anon() { const u = user(); return !u || u.isAnonymous; },
   async linkEmail(email, pw) {                // 把当前账号绑定邮箱（好友、资料都保留）
     const u = user(); if (!u) throw { code: 'auth/network-request-failed' };
@@ -69,6 +71,14 @@ window.Auth = {
       catch (e) { if (e && e.code === 'auth/credential-already-in-use' && e.credential) return { cred: e.credential }; throw e; }
     }
     await auth.signInWithPopup(prov); reconnect(); return { signed: true };
+  },
+  get googleLinked() { const u = user(); return !!(u && (u.providerData || []).some(p => p && p.providerId === 'google.com')); },
+  get googleEmail() { const u = user(), p = u && (u.providerData || []).find(x => x && x.providerId === 'google.com'); return (p && p.email) || ''; },
+  async linkGoogle() {                         // ID 账号绑定 Google：账号不变（好友、资料、金币、外观全保留），只是多一种登录方式；这个 Google 已有别的账号时返回 { cred }，由界面让用户选
+    const u = user(); if (!u) throw { code: 'auth/network-request-failed' };
+    const prov = new firebase.auth.GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' });
+    try { await u.linkWithPopup(prov); await u.getIdToken(true); return { linked: true }; }
+    catch (e) { if (e && e.code === 'auth/credential-already-in-use' && e.credential) return { cred: e.credential }; throw e; }
   },
   async googleSwitch(cred) { await auth.signInWithCredential(cred); reconnect(); },   // 切换成已有的 Google 账号（当前游客资料不合并）
   async signOut() { await auth.signOut(); location.reload(); },     // 退出后刷新页面，回到登录页（必须重新登录才能进游戏）

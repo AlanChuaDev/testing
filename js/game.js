@@ -288,6 +288,15 @@ function ktvUpdate(dt) {
   } else { $('banner').hidden = true; G.stg = { mode: 'idle', queue: K.queue.map(q => q.name) }; }
   renderQueue();
 }
+/* 外观绑定账号：服务器告诉我「这个账号存过的外观」→ 以账号为准，换设备 / 清缓存后外观还在 */
+function adoptLook(m) {
+  if (!m || !m.has || !m.outfit || !G.me) return false;
+  Object.assign(G.me.outfit, DEFAULT_OUTFIT, m.outfit);
+  G.owned.length = 0; (m.owned || []).forEach(x => G.owned.push(x)); store.set('owned', G.owned);
+  applyOutfit(G.me.inst, G.me.outfit); store.set('outfit', G.me.outfit); try { drawPortrait(); } catch (e) {}
+  return true;
+}
+if (window.Net) Net.on('me_look', m => { if (!adoptLook(m) && m && m.has) G.pendingLook = m; });
 if (window.Net) Net.on('stage', m => {           // 服务器下发：这个房间的排队情况（唯一的真相）
   const K = G.ktv, my = Net.myId(); K.online = true;
   K.queue = (m.queue || []).map(q => Object.assign({}, q, { you: q.pid === my }));
@@ -646,6 +655,7 @@ async function boot() {
     let buf; if (window.GLB64) { const s = atob(window.GLB64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); buf = u.buffer; } else buf = await (await fetch('assets/girl.glb')).arrayBuffer();
     G.model = await GLBChar.loadModel(buf, G.GR); GLBChar.addActions(G.model);
     const saved = store.get('outfit', null); G.me = makeEntity(0, 2.5, (window.Profile && Profile.name) || '我', Object.assign({}, DEFAULT_OUTFIT, saved || {}), true);
+    if (G.pendingLook) { adoptLook(G.pendingLook); G.pendingLook = null; }
     { const st = Scenes.PLAZA_STYLES[G.style] || Scenes.PLAZA_STYLES.cozy; G.hour = QS.get('t') ? parseFloat(QS.get('t')) : st.hour; if (QS.get('t')) G.timeMode = 'x'; }
     G.scene = getScene('plaza'); enterScene('plaza'); spawnCoins();
     if (QS.get('pz')) { G.me.z = parseFloat(QS.get('pz')); G.cam.target[2] = G.me.z - G.scene.camera.lead; }

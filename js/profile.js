@@ -80,7 +80,18 @@ function accountBox() {
         h('button', { class: 'chip', type: 'button', text: '登录已有账号', onclick: () => { if (confirm('登录后会切换成那个账号，这台设备当前的游客资料不会合并。继续？')) run(() => A.signIn(email.value.trim(), pw.value), '登录成功'); } }),
         h('button', { class: 'chip', type: 'button', text: '忘记密码', onclick: () => run(() => A.resetPassword(email.value.trim()), '重置邮件已发送（也看看垃圾箱）') })));
   } else {
-    box.append(h('p', { text: '已登录：' + A.label }), h('button', { class: 'chip', type: 'button', text: '退出账号', onclick: () => { if (confirm('退出后需要重新登录才能进入游戏。确定？')) run(() => A.signOut()); } }));
+    const gBind = async () => {
+      try {
+        const r = await A.linkGoogle();
+        if (r && r.cred) {
+          if (confirm('这个 Google 账号已经有另一个游戏账号，两个账号的数据无法合并。\n点「确定」= 切换到那个 Google 账号（当前账号的好友、金币、外观不会搬过去）\n点「取消」= 不绑定，继续用当前账号')) { await A.googleSwitch(r.cred); toast('已切换账号', 2200); }
+        } else { toast('已绑定 Google ✅ 以后可以用 Google 登录这个账号', 3000); if (!meP.hidden) renderMe(); }
+      } catch (e) { toast(A.err(e), 3200); }
+    };
+    box.append(h('p', { text: '已登录：' + A.label }), A.googleLinked
+      ? h('p', { class: 'hint', text: '🔵 已绑定 Google：' + (A.googleEmail || '') })
+      : h('div', { class: 'pfRow' }, h('button', { class: 'chip on', type: 'button', text: '🔵 绑定 Google', onclick: gBind }), h('span', { class: 'hint', text: ' 绑定后好友、金币、外观都保留，换设备也能用 Google 登录' })),
+      h('button', { class: 'chip', type: 'button', text: '退出账号', onclick: () => { if (confirm('退出后需要重新登录才能进入游戏。确定？')) run(() => A.signOut()); } }));
   }
   return box;
 }
@@ -163,6 +174,8 @@ on('me_profile', m => {
   S.authed = true; S.me = m.profile; S.acct = m.acct;
   const g = window.__game; if (g && g.me) g.me.name = m.profile.name;
   if (window.Profile) Profile.name = m.profile.name; $('pname').textContent = m.profile.name;
+  if (window.Auth) Auth.setDisplayName(m.profile.name);   // 昵称记到账号上，换设备登录直接用
+  try { const lp = JSON.parse(localStorage.getItem('sc_profile') || 'null'); if (lp && lp.name !== m.profile.name) { lp.name = m.profile.name; localStorage.setItem('sc_profile', JSON.stringify(lp)); } } catch (e) {}
   if (m.saved) toast(m.renamed ? '昵称已更新 ✅' : '资料已保存 ✅');
   if (!meP.hidden) renderMe();
 });
