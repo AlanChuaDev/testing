@@ -144,6 +144,7 @@ const UE = (m) => { const e = new Error(m); e.user = true; return e; };
 const byPubWs = new Map(); // pub -> 当前在线的连接（登录用户）
 
 // ---------- 基础 ----------
+const myTime = () => new Date(Date.now() + 8 * 3600e3).toISOString().replace("T", " ").slice(0, 19) + " (MY)"; // 马来西亚时间 UTC+8
 const httpServer = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
   res.end("STAR PLAZA multiplayer server is running. online=" + wss.clients.size);
@@ -480,6 +481,7 @@ wss.on("connection", (ws) => {
         } catch (e) { console.error("account load failed:", e.message); ws.authed = false; ws.name = cleanName(m.name); ws.blocks = new Set(); send(ws, { type: "auth_fail", message: "账号服务暂时不可用，已作为游客进入" }); }
       }
       send(ws, { type: "hello_ok", pub: ws.pub, authed: !!ws.authed });
+      ws.joinAt = Date.now(); console.log("JOIN", myTime(), JSON.stringify(ws.name || ""), ws.authed ? (ws.acct && ws.acct.anon ? "anon" : "account") : "guest", "pub=" + ws.pub, "online=" + wss.clients.size);
       attachTeam(ws, m.team);
       return;
     }
@@ -964,6 +966,7 @@ function leaveRoom(ws) {
 }
 function onClose(ws) {
   if (ws.closed) return; ws.closed = true;
+  if (ws.joinAt) { const mins = Math.max(0, Math.round((Date.now() - ws.joinAt) / 60000)); console.log("LEAVE", myTime(), JSON.stringify(ws.name || ""), "pub=" + ws.pub, "stayed=" + mins + "min", "online=" + Math.max(0, wss.clients.size - 1)); }
   leaveRoom(ws);
   byPid.delete(ws.playerId);
   if (ws.authed && byPubWs.get(ws.pub) === ws) { byPubWs.delete(ws.pub); presence(ws); }
