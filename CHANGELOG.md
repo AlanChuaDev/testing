@@ -1,5 +1,10 @@
 # 更新记录
 
+## 补回后背视角 + 脚底补偿 + 全屏按钮（view2）
+- 这些功能（view1 / fs1）被一次旧版本 zip 覆盖掉了，这次在最新代码（含商店 shop3）上重新合并补回，没有改动商店相关代码。
+- 改动文件：`js/game.js`（视角 / 摇杆 / 镜头跟随 / 脚底补偿）、`js/world.js`（`setCamera` 支持 yaw）、`index.html`（加载 `js/floorlift.js`、全屏按钮、iPhone 主屏幕 meta）。`js/floorlift.js` 仓库里已有，未改。
+- ⚠ 以后任何 zip 改 `game.js` / `world.js` / `index.html` 前，请先拉最新代码再改，否则会再次冲掉。
+
 ## 补回被覆盖的商店代码（shop3）
 - 之前整包上传把 index.html 里加载 shop.js / shopdata.js 的那一行，和 game.js 里的「名牌称号 / 名字颜色 / 气泡颜色 / 礼物按钮」覆盖掉了，已在最新版本上补回。
 
