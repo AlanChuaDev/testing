@@ -456,6 +456,7 @@ wss.on("connection", (ws) => {
 
   ws.q = Promise.resolve();
   const onMessage = async (raw) => {
+    if (ws.kicked) return;   // 已被顶号的旧连接：它再发什么都不处理
     // 简单限速：每秒最多 60 条
     const now = Date.now();
     if (now - ws.msgWindow > 1000) { ws.msgWindow = now; ws.msgCount = 0; }
@@ -472,7 +473,7 @@ wss.on("connection", (ws) => {
       if (ws.helloDone) return;
       ws.helloDone = true;
       if (m.token && AUTH) {
-        try { const a = await AUTH.verify(m.token); ws.fuid = a.uid; ws.pub = pubOf("fb:" + a.uid); ws.authed = true; ws.acct = { anon: a.anon, email: a.email }; }
+        try { const a = await AUTH.verify(m.token); ws.fuid = a.uid; ws.pub = pubOf("fb:" + a.uid); ws.authed = true; kickDup(ws); ws.acct = { anon: a.anon, email: a.email }; }
         catch (e) { send(ws, { type: "auth_fail", message: "登录凭证无效，已作为游客进入" }); }
       }
       if (!ws.authed) { const uid = String(m.uid || ""); if (uid.length >= 8 && uid.length <= 80) ws.pub = pubOf(uid); ws.name = cleanName(m.name); ws.blocks = new Set((Array.isArray(m.blocks) ? m.blocks : []).slice(0, 200).map((x) => String(x).slice(0, 16))); }
@@ -988,6 +989,16 @@ function leaveRoom(ws) {
     else sendToRoom(room, { type: "count", n: players.size });
   }
 }
+function kickDup(ws) { // 顶号：同一个账号再连上来，立刻把旧连接踢掉并清掉旧人物（刷新 / 两个标签页 / 两台设备都不会出现两个一样的人）
+  for (const c of [...wss.clients]) {
+    if (c === ws || c.closed || !c.authed || c.pub !== ws.pub) continue;
+    console.log("KICK", myTime(), JSON.stringify(c.name || ""), "pub=" + c.pub, "旧连接被新登录顶掉");
+    c.kicked = true; send(c, { type: "kicked", reason: "这个账号在别处登录了" });
+    onClose(c);                                                    // 马上清掉旧人物 / 舞台排队 / 在线状态
+    try { c.close(4001, "dup"); } catch {}
+    setTimeout(() => { try { c.terminate(); } catch {} }, 2000);   // 给它 2 秒把「被顶号」的消息发出去
+  }
+}
 function onClose(ws) {
   if (ws.closed) return; ws.closed = true;
   if (ws.joinAt) { const mins = Math.max(0, Math.round((Date.now() - ws.joinAt) / 60000)); console.log("LEAVE", myTime(), JSON.stringify(ws.name || ""), "pub=" + ws.pub, "stayed=" + mins + "min", "online=" + Math.max(0, wss.clients.size - 1)); }
@@ -1006,7 +1017,7 @@ setInterval(() => {
     ws.isAlive = false;
     try { ws.ping(); } catch {}
   }
-}, 25000);
+}, 12000);   // 12 秒检查一次：没回应的残留连接最多 24 秒内清掉（以前 25 秒一轮，最长 50 秒）
 
 loadCfg().finally(() => {
   httpServer.listen(PORT, "0.0.0.0", () => console.log("Multiplayer server listening on port " + PORT));

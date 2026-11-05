@@ -11,7 +11,7 @@ const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'st
 const MAX_LISTEN = Math.max(1, Math.min(20, +CFG.maxListeners || 8)), badUntil = new Map(); let fullToastAt = 0;
 
 let G = null, api = null, ws = null, myId = null, myPub = '', started = false, joinedRoom = null, wantRoom = null, inRoom = false;
-let retry = 0, retryT = 0, hello = 0, coldT = 0, lastRx = 0, totalOnline = 0;
+let retry = 0, retryT = 0, hello = 0, coldT = 0, lastRx = 0, totalOnline = 0, kickedOut = false;
 let offset = 0, bestRtt = 1e9;
 const remotes = new Map();         // playerId -> entity
 const out = new Map();             // 我是演唱者：listenerId -> RTCPeerConnection
@@ -77,16 +77,30 @@ function connect() {
   ws.onerror = () => {};
 }
 function scheduleRetry() {
+  if (kickedOut) return;                                        // 被顶号：不自动重连，不然两个页面会互相顶来顶去
   clearTimeout(retryT); retry = Math.min(retry + 1, 8);
   if (retry === 2) toast('连接断开，正在重连…', 2000);
   retryT = setTimeout(connect, Math.min(1000 * retry, 8000));
 }
 function kick() {     // 回到前台 / 网络恢复：不用等退避，马上重连；半死不活的连接直接掐掉重来
-  if (!started) return;
+  if (!started || kickedOut) return;
   if (!ws || ws.readyState > 1) { retry = 0; clearTimeout(retryT); connect(); }
   else if (ws.readyState === 1 && Date.now() - lastRx > 15000) { try { ws.close(); } catch (e) {} }
 }
+function showKicked(reason) {       // 被顶号：盖一层提示，点按钮才重新连接（会把另一处顶下去）
+  if (document.getElementById('kickedBox')) return;
+  const box = document.createElement('div'); box.id = 'kickedBox';
+  box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(10,8,30,.88);color:#fff;font-family:inherit;text-align:center;padding:24px';
+  const card = document.createElement('div'); card.style.cssText = 'max-width:320px';
+  const t = document.createElement('div'); t.textContent = '⚠ ' + (reason || '这个账号在别处登录了'); t.style.cssText = 'font-size:17px;font-weight:700;margin-bottom:8px';
+  const p = document.createElement('div'); p.textContent = '同一个账号同时只能在一个地方玩。想回到这里，点下面的按钮（另一处会被下线）。'; p.style.cssText = 'font-size:13px;opacity:.8;margin-bottom:16px';
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = '在这里继续玩'; b.style.cssText = 'padding:10px 22px;border-radius:999px;border:0;background:linear-gradient(135deg,#ff5fb0,#c04fe8);color:#fff;font-size:15px;font-weight:700';
+  b.onclick = () => { kickedOut = false; box.remove(); retry = 0; clearTimeout(retryT); try { if (ws) ws.close(); } catch (e) {} ws = null; connect(); };
+  card.append(t, p, b); box.append(card); document.body.appendChild(box);
+}
 document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
+addEventListener('pagehide', () => { try { if (ws && ws.readyState === 1) ws.close(1000); } catch (e) {} });   // 刷新 / 关页面时主动断开，服务器马上清掉人物
+addEventListener('pageshow', e => { if (e.persisted) kick(); });
 addEventListener('online', kick);
 setInterval(() => { if (started && ws && ws.readyState === 1 && Date.now() - lastRx > 25000) { try { ws.close(); } catch (e) {} } }, 5000);   // 25 秒没收到任何数据 = 假连接
 
@@ -105,6 +119,7 @@ function onMsg(m) {
   switch (m.type) {
     case 'connected': myId = m.playerId; break;
     case 'hello_ok': myPub = m.pub || ''; break;
+    case 'kicked': kickedOut = true; showKicked(m.reason); break;
     case 'pong': {
       const t1 = Date.now(), rtt = t1 - m.t;
       if (rtt < bestRtt * 1.3 + 10) { offset = m.ts - (m.t + rtt / 2); bestRtt = Math.min(bestRtt, rtt); }
