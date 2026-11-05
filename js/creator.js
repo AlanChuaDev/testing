@@ -31,12 +31,36 @@ function openCreator(opts) {
   if (CR.isNew) { CR.tab = 'base'; CR.name = cleanName(window.Profile && Profile.name); }
   closePanels(); CR.open = true; $('creator').hidden = false; CR.zoomTarget = CR_FACE_TABS.includes(CR.tab) ? 1 : 0; renderCreator();
 }
+/* 取名：输入时查「能不能用」，点完成时当场占下；被占 / 不合法 → 就停在面板里提示，不再悄悄加数字 */
+function nameMsg(t, good) { const e = $('cNameMsg'); if (!e) return; e.textContent = t || ''; e.style.color = good ? '#7be3a0' : '#ff8fa3'; }
+function onNameResult(m) {
+  if (!m || m.q !== CR.nq) return;
+  if (m.op === 'check') { nameMsg(m.ok ? '✓ 这个名字可以用' : '✗ ' + m.reason, m.ok); return; }
+  const w = CR.nameWait; if (!w) return; CR.nameWait = null; clearTimeout(w.t); w.done(m);
+}
+function checkNameSoon() {
+  clearTimeout(CR.nameT); const nm = cleanName(CR.name); if (!nm) return nameMsg('');
+  if (!(window.Net && Net.connected)) return nameMsg('');
+  CR.nameT = setTimeout(() => { CR.nq = (CR.nq || 0) + 1; Net.send({ type: 'name_check', name: nm, q: CR.nq }); }, 500);
+}
 function closeCreator() {
   if (CR.isNew) {
     const nm = cleanName(CR.name);
     if (!nm) { CR.tab = 'base'; CR.zoomTarget = 0; renderCreator(); cToast('请先给角色起个名字'); const i = $('cName'); if (i) i.focus(); return; }
-    window.Profile = window.Profile || {}; Profile.name = nm; store.set('profile', Profile); G.me.name = nm;   // 昵称保存在本机，之后连服务器就用这个名字
+    if (CR.nameWait) return;                                               // 正在向服务器确认名字
+    if (window.Net && Net.connected && window.Friends && Friends.authed) {   // 在线：当场占名字
+      CR.nq = (CR.nq || 0) + 1; nameMsg('正在确认名字…', true);
+      CR.nameWait = { done: m => { if (m.ok) { CR.name = m.name; nameMsg(''); finishClose(m.name); } else { CR.tab = 'base'; CR.zoomTarget = 0; renderCreator(); nameMsg('✗ ' + (m.reason || '这个名字不能用'), false); cToast(m.reason || '这个名字不能用'); const i = $('cName'); if (i) i.focus(); } },
+        t: setTimeout(() => { CR.nameWait = null; nameMsg('服务器没有回应，请再点一次「完成」', false); }, 7000) };
+      Net.send({ type: 'name_first', name: nm, q: CR.nq }); return;
+    }
+    if (!(CR.offAt && Date.now() - CR.offAt > 8000)) { CR.offAt = CR.offAt || Date.now(); cToast('还没连上服务器，等几秒（右上角显示「在线」）再点「完成」'); return; }   // 一直连不上：8 秒后再点才按离线单机处理
+    return finishClose(nm);
   }
+  finishClose();
+}
+function finishClose(nm) {
+  if (nm) { window.Profile = window.Profile || {}; Profile.name = nm; store.set('profile', Profile); G.me.name = nm; }
   CR.open = false; $('creator').hidden = true; store.set('outfit', G.me.outfit); drawPortrait();
   if (CR.isNew) { CR.isNew = false; store.set('new_char', false); const cb = CR.onDone; CR.onDone = null; if (cb) cb(); }
 }
@@ -66,7 +90,7 @@ function renderCreator() {
     case 'base': {
       if (CR.isNew) {
         sec('昵称（最多 12 个字）'); const i = document.createElement('input'); i.id = 'cName'; i.className = 'cName'; i.type = 'text'; i.maxLength = 12; i.placeholder = '给你的角色起个名字'; i.autocomplete = 'off'; i.value = CR.name;
-        i.oninput = () => { CR.name = i.value; }; i.addEventListener('keydown', e => { if (e.key === 'Enter') i.blur(); }); body.appendChild(i);
+        i.oninput = () => { CR.name = i.value; checkNameSoon(); }; i.addEventListener('keydown', e => { if (e.key === 'Enter') i.blur(); }); body.appendChild(i); const nmsg = document.createElement('div'); nmsg.id = 'cNameMsg'; nmsg.className = 'hint'; nmsg.style.minHeight = '18px'; body.appendChild(nmsg);
       }
       chipsRow(sec('性别'), ['女生', '男生'], male ? 1 : 0, i => { o.gender = i ? 'm' : 'f'; commit(); });
       const h = sec('肤色'); SKIN.forEach((s, i) => { const b = document.createElement('button'); b.className = 'sw' + ((o.skin || 0) === i ? ' on' : ''); b.style.background = `rgb(${251 * s[0] | 0},${217 * s[1] | 0},${196 * s[2] | 0})`; b.onclick = () => { o.skin = i; commit(); }; h.appendChild(b); });
@@ -123,6 +147,7 @@ function bindCreator() {
   cv.addEventListener('pointermove', e => { if (CR.drag && e.pointerId === CR.drag.id) { CR.yaw += (e.clientX - CR.drag.x) * .012; CR.drag.x = e.clientX; } });
   const end = e => { if (CR.drag && e.pointerId === CR.drag.id) CR.drag = null; };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  if (window.Net) Net.on('name_result', onNameResult);
   $('cDone').onclick = closeCreator; $('cRand').onclick = creatorRandom;
   $('cZoomBody').onclick = () => { CR.zoomTarget = 0; }; $('cZoomFace').onclick = () => { CR.zoomTarget = 1; };
   ['keydown', 'keyup'].forEach(t => $('creator').addEventListener(t, e => e.stopPropagation()));

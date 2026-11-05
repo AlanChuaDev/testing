@@ -680,7 +680,8 @@ async function boot() {
     requestAnimationFrame(frame);
     G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
     if (window.Net) Net.start(G);
-    if (store.get('new_char', false)) { store.set('new_char', false); setTimeout(() => Creator.open(), 600); }   // [创建面板] 新建角色后第一次进游戏：自动弹出创建人物面板
+    if (store.get('new_char', false)) { store.set('new_char', false); setTimeout(() => Creator.open({ newChar: true }), 600); }   // 新账号：创建人物面板里带「昵称」输入框
+    else if (store.get('open_creator', false)) { store.set('open_creator', false); setTimeout(() => Creator.open(), 600); }   // 登录页「修改角色」   // [创建面板] 新建角色后第一次进游戏：自动弹出创建人物面板
   } catch (err) { console.error(err); text.textContent = '加载失败：' + err.message + '（需要支持 WebGL2 的浏览器）'; }
 }
 (window.loginReady || Promise.resolve()).then(boot);

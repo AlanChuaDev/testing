@@ -785,12 +785,25 @@ wss.on("connection", (ws) => {
     }
 
     // ----- 资料 / 好友 / 私信（需要登录）-----
-    if (/^(profile_|name_set|friends?_|dm_|care$|wallet_|sign_in$|shop_|gift_)/.test(m.type)) {   // 问暖 / 钱包 / 签到 / 商店 / 礼物 的消息也要走这里（以前漏了，所以点了没反应）
+    if (/^(profile_|name_set|name_check|name_first|friends?_|dm_|care$|wallet_|sign_in$|shop_|gift_)/.test(m.type)) {   // 问暖 / 钱包 / 签到 / 商店 / 礼物 的消息也要走这里（以前漏了，所以点了没反应）
       if (!S) throw UE("社交功能暂未开启");
       if (!ws.authed) throw UE("请先登录：点左上角「我」→ 账号");
       const pubArg = () => { const p = String(m.pub || "").slice(0, 16); if (!/^[0-9a-f]{16}$/.test(p)) throw UE("参数不对"); return p; };
       if (m.type === "profile_get") { const pub = m.pub ? pubArg() : ws.pub; return send(ws, { type: "profile", pub, profile: await S.viewProfile(ws.pub, pub) }); }
       if (m.type === "profile_set") { const p = await S.setProfile(ws.pub, m); return send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct, saved: true }); }
+      if (m.type === "name_check" || m.type === "name_first") { // 新账号取名：先查名字能不能用；点完成时当场占下
+        const op = m.type === "name_check" ? "check" : "first";
+        if (op === "check") { const now = Date.now(); if (now - (ws.ncAt || 0) < 300) return; ws.ncAt = now; }
+        try {
+          if (op === "check") return send(ws, { type: "name_result", op, ok: true, name: await S.nameFree(ws.pub, m.name), q: m.q });
+          const p = await S.setFirstName(ws.pub, m.name); ws.name = p.name;
+          if (ws.info) ws.info.name = p.name; const pl = ws.room && rooms.get(ws.room)?.get(ws.playerId); if (pl) pl.info.name = p.name;
+          if (ws.room) sendToRoom(ws.room, { type: "rename", playerId: ws.playerId, name: p.name }, ws);
+          const t = teamOfWs(ws); if (t) { const mem = t.members.get(ws.pub); if (mem) mem.name = p.name; teamSend(t); }
+          presence(ws); send(ws, { type: "me_profile", profile: S.publicMe(p), acct: ws.acct });
+          return send(ws, { type: "name_result", op, ok: true, name: p.name, q: m.q });
+        } catch (e) { if (e && e.user) return send(ws, { type: "name_result", op, ok: false, reason: e.message, q: m.q }); throw e; }
+      }
       if (m.type === "name_set") {
         const p = await S.setName(ws.pub, m.name); ws.name = p.name;
         if (ws.info) ws.info.name = p.name; const pl = ws.room && rooms.get(ws.room)?.get(ws.playerId); if (pl) pl.info.name = p.name;

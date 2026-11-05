@@ -136,6 +136,22 @@ function create({ store, filterText }) {
     const np = Object.assign({}, p, { name, nameLower: k, nameChangedAt: now });
     await store.merge("profiles", pub, { name, nameLower: k, nameChangedAt: now }); putProfile(pub, np); return np;
   }
+  async function nameFree(pub, raw) { // 只检查，不占用：名字合法吗？被别人用了吗？
+    const name = cleanName(raw), ex = await store.get("names", sha(nameKey(name)));
+    if (ex && ex.pub !== pub) throw E("这个昵称已经有人用了，换一个吧");
+    return name;
+  }
+  async function setFirstName(pub, raw) { // 新账号第一次取名：当场占下，不加数字、不算 24 小时冷却
+    const p = await ensureProfile(pub, null);
+    if (p.named || p.nameChangedAt) throw E("昵称已经设置过了，想改名请在「我」里改");
+    const name = cleanName(raw), k = nameKey(name);
+    if (k !== p.nameLower) {
+      if (!(await store.create("names", sha(k), { pub, name }))) { const ex = await store.get("names", sha(k)); if (!ex || ex.pub !== pub) throw E("这个昵称已经有人用了，换一个吧"); }
+      await store.del("names", sha(p.nameLower));
+    }
+    const np = Object.assign({}, p, { name, nameLower: k, named: true });
+    await store.merge("profiles", pub, { name, nameLower: k, named: true }); putProfile(pub, np); return np;
+  }
   async function setProfile(pub, d) {
     const p = await ensureProfile(pub, null); d = d || {};
     const gender = GENDERS.includes(d.gender) ? d.gender : p.gender, visibility = VIS.includes(d.visibility) ? d.visibility : p.visibility;
@@ -222,7 +238,7 @@ function create({ store, filterText }) {
   const dmRead = (me, other) => store.setField("inbox", me, "unread." + other, 0);
   async function dmEvidence(from, to, n) { try { return (await store.last("dms/" + conv(from, to) + "/msgs", 12)).filter((m) => m.from === from).slice(-n).map((m) => m.text); } catch (e) { return []; } }
 
-  return { store, cleanName, cleanLink, ensureProfile, getProfile, setName, setProfile, publicMe, viewProfile, getF, friendsView, request, accept, decline, unfriend, getBlocks, setBlocks, sendDm, dmHistory, dmRead, dmEvidence, E, MAX_FRIENDS };
+  return { store, cleanName, cleanLink, ensureProfile, getProfile, setName, nameFree, setFirstName, setProfile, publicMe, viewProfile, getF, friendsView, request, accept, decline, unfriend, getBlocks, setBlocks, sendDm, dmHistory, dmRead, dmEvidence, E, MAX_FRIENDS };
 }
 
 /* ---------------- 登录凭证验证 ---------------- */
