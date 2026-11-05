@@ -6,6 +6,7 @@ assets/music/bukit.mp3
 assets/music/funfair.mp3
 assets/music/klcc.mp3
 assets/music/mall.mp3
+assets/music/merdeka.mp3
 assets/music/plaza.mp3
 assets/songs/aiwohaishita.lrc
 assets/songs/aiwohaishita.mp3
