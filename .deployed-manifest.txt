@@ -84,6 +84,7 @@ js/scene-common.js
 js/scene-klcc.js
 js/scene_beach.js
 js/scene_funfair.js
+js/scene_merdeka.js
 js/scenes.js
 js/shop.js
 js/shopdata.js

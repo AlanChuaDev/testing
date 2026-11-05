@@ -15,7 +15,7 @@ const G = {
   me: null, remotes: [], coins: [], hour: 18.4, timeMode: 'auto', t: 0, joy: { x: 0, z: 0 }, keys: {}, target: null,
   owned: store.get('owned', []),   // [创建面板] 已领取的套装（例如 'hoodie'）
   coinCount: store.get('coins', 1250), chat: { world: [], team: [], family: [] }, tab: 'world',
-  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62, yaw: 0 }, camMode: store.get('camMode', store.get('wide', false) ? 'wide' : 'orig'), quality: store.get('q', 1.5), outline: store.get('ol', 1),
+  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62 }, quality: store.get('q', 1.5), outline: store.get('ol', 1),
   wide: store.get('wide', false), transitioning: false, near: null, standHot: { id: 'stand' }, stg: { mode: 'idle', queue: [] }, ktv: { queue: [], cur: null, arrived: false, online: false, mine: false, doneOk: false },
 };
 const SKIN = [[1, 1, 1], [.96, .88, .8], [.88, .74, .62], [.78, .62, .5]];
@@ -74,22 +74,6 @@ function blocked(sc, x, z, r, e) {
 }
 /* GM 飞行加速：FLY.on（只有 GM 能开）时，自己的人物无视建筑和物体（不碰撞），速度 ×FLY.mul；
    高度仍然由 heightAt 决定，所以走到楼梯 / 台阶 / 斜坡会正常升降，不会陷进地板。地图边界保留，不会飞出地图。 */
-/* 脚底补偿：① 地板：很多地方的地板模型比 heightAt() 高几厘米（地毯 / 瓷砖 / 台阶边 / 沙丘），数据在 js/floorlift.js（每 0.5 米一格）。
-   ② 动作：模型的 sit / sing / cheer / walk 动作脚底会比站立时低 1~6 厘米（量过骨骼），按动作抬回来。 */
-const FL_UNIT = .005, _flCache = {};
-function flGrid(id) {
-  const k = (window.FLOOR_LIFT_ALIAS && window.FLOOR_LIFT_ALIAS[id]) || id; if (_flCache[k] !== undefined) return _flCache[k];
-  const e = window.FLOOR_LIFT && window.FLOOR_LIFT[k]; if (!e) return (_flCache[k] = null);
-  const a = new Uint8Array(e.nx * e.nz); let p = 0; e.d.split(';').forEach(t => { if (!t) return; const v = parseInt(t[0], 36), n = parseInt(t.slice(1), 16); a.fill(v, p, p + n); p += n; });
-  return (_flCache[k] = { e, a });
-}
-function floorLift(id, x, z) {
-  const g = flGrid(id); if (!g) return 0; const { e, a } = g; let m = 0;
-  for (const dx of [-.2, .2]) for (const dz of [-.2, .2]) { const i = Math.floor((x + dx - e.x0) / e.C), j = Math.floor((z + dz - e.z0) / e.C); if (i < 0 || j < 0 || i >= e.nx || j >= e.nz) continue; const v = a[j * e.nx + i]; if (v > m) m = v; }
-  return m * FL_UNIT;
-}
-window.__floorLift = floorLift;   // 调试用：控制台输入 __floorLift('klcc', x, z) 可以看某个位置的地板补偿（米）
-const CLIP_LIFT = { walk: .008, sit: .03, sing: .035, cheer: .04 };   // 模型空间（游戏里再乘人物缩放）
 const FLY = window.GMFly = { on: false, mul: 4 };
 const flying = () => !!(FLY.on && window.GM && window.GM.isGM);
 function moveEnt(e, dx, dz, sc) {
@@ -109,8 +93,8 @@ function randomSpot(sc) { for (let k = 0; k < 40; k++) { const r = sc.npcRect, x
 
 /* ---------------- scene switching ---------------- */
 /* ======================= integration glue (maps <-> hub, seats, interactions, buttons) ======================= */
-const HUB = [['plaza', '星光广场', '⭐'], ['bukit', '武吉免登', '🌃'], ['klcc', 'KLCC 双子塔', '🏙️'], ['beach', '星光海滩', '🏖️'], ['funfair', '星光嘉年华', '🎡']];   // KTV / 试衣间 are buildings inside the plaza, not hub maps
-const HUB_DROP = { klcc: ['to_bukit', 'monorail_k'], bukit: ['monorail'], beach: ['plaza'], funfair: ['plaza'] };   // each map's own travel portals -> replaced by ONE hub portal
+const HUB = [['plaza', '星光广场', '⭐'], ['merdeka', '独立广场', '🏛️'], ['bukit', '武吉免登', '🌃'], ['klcc', 'KLCC 双子塔', '🏙️'], ['beach', '星光海滩', '🏖️'], ['funfair', '星光嘉年华', '🎡']];   // KTV / 试衣间 are buildings inside the plaza, not hub maps
+const HUB_DROP = { klcc: ['to_bukit', 'monorail_k'], bukit: ['monorail'], beach: ['plaza'], funfair: ['plaza'], merdeka: ['plaza'] };   // each map's own travel portals -> replaced by ONE hub portal
 const HUB_AT = { plaza: [-10, 10] };
 /* 动作菜单：c=动画名（也是联机同步用的名字，最长 12 个字符，且必须写进 net.js 的 POSES）  t=持续秒数  b=头顶气泡  sit=坐着能不能做
    ✔ 和 ❌ 放在最前面。 */
@@ -168,6 +152,18 @@ function fixSeatAp(sc) {
     for (const d of [1.15, 1.5, 1.9, 2.4, 2.9]) { for (const ang of [0, .5, -.5, 1, -1, 1.6, -1.6, 2.4, -2.4, 3.14]) { const a = s.yaw + ang, x = s.x + Math.sin(a) * d, z = s.z + Math.cos(a) * d; if (!blocked(sc, x, z, .3)) { s.ap = [x, z]; if (s.hot) { s.hot.x = x; s.hot.z = z; } done = true; break; } } if (done) break; }
   }
 }
+/* 出生点和传送阵放在一起：把传送阵挪到出生点旁边（约 3 米，优先放在人物正前方），玩家一进图就能看到。
+   先找「周围一圈都没有障碍」的位置，找不到再放宽，最后实在没有就保持原位。 */
+function placeHubAtSpawn(sc, hub) {
+  if (!sc.spawn) return false;
+  const sx = sc.spawn[0], sz = sc.spawn[1], DIST = [3.2, 3.8, 4.6, 2.6], ANG = [0, .6, -.6, 1.2, -1.2, 1.9, -1.9, 2.6, -2.6, PI];   // 角度 0 = 正前方（-z，镜头看过去的方向）
+  const ringFree = (x, z) => { for (let k = 0; k < 8; k++) if (blocked(sc, x + Math.cos(k * PI / 4) * 1.1, z + Math.sin(k * PI / 4) * 1.1, .2)) return false; return true; };
+  for (const strict of [true, false]) for (const d of DIST) for (const a of ANG) {
+    const x = sx + Math.sin(a) * d, z = sz - Math.cos(a) * d;
+    if (!blocked(sc, x, z, .5) && (!strict || ringFree(x, z))) { hub.x = x; hub.z = z; return true; }
+  }
+  return false;
+}
 function glueScene(id, sc) {
   // 1) one hub portal per map
   if (HUB.some(h => h[0] === id)) {
@@ -175,7 +171,7 @@ function glueScene(id, sc) {
     for (const p of sc.portals) if (drop.includes(p.id)) { hub = p; break; }
     if (hub) { for (let i = sc.portals.length - 1; i >= 0; i--) if (drop.includes(sc.portals[i].id) && sc.portals[i] !== hub) sc.portals.splice(i, 1); }
     else { const at = HUB_AT[id]; if (at) { hub = { x: at[0], z: at[1] }; sc.portals.push(hub); } }
-    if (hub) { Object.assign(hub, { id: 'hub', hub: true, label: '传送阵', icon: '🌀', color: [.55, .8, 1], r: 1.6 }); delete hub.to; delete hub.spawn; delete hub.auto; }
+    if (hub) { Object.assign(hub, { id: 'hub', hub: true, label: '传送阵', icon: '🌀', color: [.55, .8, 1], r: 1.6 }); delete hub.to; delete hub.spawn; delete hub.auto; placeHubAtSpawn(sc, hub); }
   }
   if (id === 'bukit') { sc.hotspots = sc.hotspots.filter(h => h.id !== 'skybridge'); if (!sc.onUse) sc.onUse = bukitUse; }
   // 2) seats for maps that do not define any (Bukit Bintang benches, beach benches + fire logs)
@@ -188,20 +184,12 @@ function glueScene(id, sc) {
 }
 
 function getScene(id) {
-  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
+  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'merdeka' && Scenes.makeMerdeka ? Scenes.makeMerdeka(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
   if (!G.scenes[id]._glued) { G.scenes[id]._glued = true; glueScene(id, G.scenes[id]); }
   return G.scenes[id];
 }
 function curCam(sc) { return (G.wide && sc.cameraWide) ? Object.assign({}, sc.camera, sc.cameraWide) : sc.camera; }
-/* 视角：orig 原版 / wide 广角 / back 第三人称后背视角（镜头在人物背后，跟着人物朝向，摇杆朝镜头前方走，画面空白处拖动可以转镜头） */
-const backView = () => G.camMode === 'back';
-const TAP_MOVE_IN_BACK = false;   // 后背视角下是否保留「点地面走过去」（false = 关闭）
-function applyView() {
-  const sc = G.scene; if (G.camMode === 'wide' && !sc.cameraWide) G.camMode = 'orig'; G.wide = G.camMode === 'wide';
-  if (backView()) { const ind = !!(sc.indoor || sc.private); G.cam.pitch = ind ? .30 : .34; G.cam.dist = ind ? 5.4 : 8.6; G.cam.fov = ind ? .95 : .86; if (G.cam.yaw == null || G.cam.yaw === 0) G.cam.yaw = G.me ? G.me.yaw + Math.PI : 0; }
-  else { const c = curCam(sc); G.cam.pitch = c.pitch; G.cam.dist = c.dist; G.cam.fov = c.fov; G.cam.yaw = 0; }
-  const b = $('viewBtn'); if (b) { b.hidden = false; b.textContent = '📷 视角：' + (backView() ? '后背' : G.wide ? '广角' : '原版'); }
-}
+function applyView() { const sc = G.scene, c = curCam(sc); G.cam.pitch = c.pitch; G.cam.dist = c.dist; G.cam.fov = c.fov; const b = $('viewBtn'); if (b) { b.hidden = !sc.cameraWide; b.textContent = '📷 视角：' + (G.wide ? '广角' : '原版'); } }
 function enterScene(id, spawn) {
   G.scene = getScene(id); G.sceneId = id; G.target = null;
   const s = spawn || G.scene.spawn; G.me.x = s[0]; G.me.z = s[1]; G.me.y = G.scene.heightAt(s[0], s[1]); G.me.vx = G.me.vz = 0;
@@ -402,7 +390,6 @@ function update(dt) {
   // player input
   let ix = G.joy.x, iz = G.joy.z; const k = G.keys;
   if (k.ArrowLeft || k.a) ix -= 1; if (k.ArrowRight || k.d) ix += 1; if (k.ArrowUp || k.w) iz -= 1; if (k.ArrowDown || k.s) iz += 1;
-  if (backView()) { G.inFwd = -iz; const cy = G.cam.yaw || 0, c = Math.cos(cy), s = Math.sin(cy), wx = ix * c + iz * s, wz = -ix * s + iz * c; ix = wx; iz = wz; }   // 后背视角：摇杆 / 键盘按「镜头方向」走
   let mag = Math.hypot(ix, iz);
   if (me.sit && (mag > .3 || G.target)) standUp(me);
   if (mag > .12) { G.target = null; if (mag > 1) { ix /= mag; iz /= mag; mag = 1; } }
@@ -413,7 +400,7 @@ function update(dt) {
     if (Math.hypot(me.x - px, me.z - pz) < sp * dt * .2) { if (G.target) { me.stuck += dt; if (me.stuck > .5) G.target = null; } } else me.stuck = 0;
     me.moving = true; me.run = !!run; me.pose = 0; me.actClip = null; const want = Math.atan2(ix, iz); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 12);
   } else me.moving = false;
-  if (!me.sit) { me.fl = (me.fl || 0) + (floorLift(G.sceneId, me.x, me.z) - (me.fl || 0)) * Math.min(1, dt * 14); me.y = sc.heightAt(me.x, me.z) + me.fl; } else me.fl = 0;
+  if (!me.sit) me.y = sc.heightAt(me.x, me.z);
   if (me.ejectT > 0) { me.ejectT -= dt; if (me.ejectT <= 0 && sc.stageZone && !me.canStage && sc.stageZone(me.x, me.z, .5)) { me.x = sc.stage.front[0]; me.z = sc.stage.front[1]; me.y = 0; G.target = null; } }
   if (sc.update) sc.update(G, dt);
   // soft separation
@@ -429,8 +416,7 @@ function update(dt) {
     inst.hidden.SignOK = clip.replace('sit_', '') !== 'signok'; inst.hidden.SignNo = clip.replace('sit_', '') !== 'signno';   // 举牌动作才显示牌子
     inst.play(clip, .2); inst.speed = e.moving ? (e.run ? 1 : (e.isMe ? 1.1 : 1.0)) : 1;
     if (e.vis !== false || e.isMe) inst.update(dt);
-    { const tl = (CLIP_LIFT[clip.replace(/^sit_.*/, 'sit')] || 0) * inst.scale; e.cl = (e.cl || 0) + (tl - (e.cl || 0)) * Math.min(1, dt * 10); }   // 动作脚底补偿
-    inst.pos[0] = e.x; inst.pos[1] = e.y + (e.cl || 0); inst.pos[2] = e.z; let d = e.yaw - inst.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); inst.yaw += d * Math.min(1, dt * 14);
+    inst.pos[0] = e.x; inst.pos[1] = e.y; inst.pos[2] = e.z; let d = e.yaw - inst.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); inst.yaw += d * Math.min(1, dt * 14);
     if (e.bt > 0) { e.bt -= dt; if (e.bt <= 0) e.bubble = null; }
   }
   // coins
@@ -442,11 +428,6 @@ function update(dt) {
   if (me.sit) best = G.standHot; else if (!best) { const q = nearSeat(me, 1.5); if (q) best = q.hot; }
   if (best !== G.near) { G.near = best; setEnter(best); }
   // camera follow
-  if (backView()) {
-    const a2 = 1 - Math.exp(-dt * 9); G.cam.ty = (G.cam.ty || 0) + (me.y - (G.cam.ty || 0)) * a2; G.cam.target[0] += (me.x - G.cam.target[0]) * a2; G.cam.target[2] += (me.z - G.cam.target[2]) * a2;
-    if (me.moving && (G.inFwd || 0) > .2 && performance.now() - (G.camTouchT || 0) > 1800) { let dy = me.yaw + Math.PI - (G.cam.yaw || 0); dy = Math.atan2(Math.sin(dy), Math.cos(dy)); G.cam.yaw = (G.cam.yaw || 0) + Math.max(-1.1 * dt, Math.min(1.1 * dt, dy * (1 - Math.exp(-dt * .9)))); }   // 自动转到背后：很慢、限速，不会晕；往后退 / 没在走时镜头不动
-    return;
-  }
   const cc = curCam(sc), tx = clamp(me.x, cc.clampX[0], cc.clampX[1]), tz = clamp(me.z - (cc.lead == null ? 2 : cc.lead), cc.clampZ[0], cc.clampZ[1]), a = 1 - Math.exp(-dt * 5);
   G.cam.ty = (G.cam.ty || 0) + (me.y - (G.cam.ty || 0)) * a; G.cam.target[0] += (tx - G.cam.target[0]) * a; G.cam.target[2] += (tz - G.cam.target[2]) * a;
 }
@@ -456,9 +437,7 @@ const ovc = $('ov'), ov = ovc.getContext('2d');
 function render() {
   const R = G.R, GR = G.GR, sc = G.scene, [w, h, dpr] = R.resize();
   const env = sc.env(G.hour), cam = G.cam;
-  let cdist = cam.dist;
-  if (backView()) { const b = sc.bounds || { x0: -99, x1: 99, z0: -99, z1: 99 }, cp = Math.cos(cam.pitch), yw = cam.yaw || 0; for (let k = 0; k < 14 && cdist > 2.4; k++) { const ex = cam.target[0] + cdist * cp * Math.sin(yw), ez = cam.target[2] + cdist * cp * Math.cos(yw); if (ex >= b.x0 - 1.2 && ex <= b.x1 + 1.2 && ez >= b.z0 - 1.2 && ez <= b.z1 + 1.2) break; cdist *= .88; } }   // 镜头不会跑到地图外面（室内 / 窄的地方自动拉近）
-  const view = R.setCamera({ target: [cam.target[0], (backView() ? 1.05 : 0.8) + (cam.ty || 0), cam.target[2]], dist: cdist, pitch: cam.pitch, fov: cam.fov, yaw: backView() ? (cam.yaw || 0) : 0 }, w, h);
+  const view = R.setCamera({ target: [cam.target[0], 0.8 + (cam.ty || 0), cam.target[2]], dist: cam.dist, pitch: cam.pitch, fov: cam.fov }, w, h);
   R.begin(env, w, h, G.t);
   if (sc.updateOcclusion) { const dt2 = Math.min(.1, Math.max(.001, G.t - (G._ot == null ? G.t : G._ot))); G._ot = G.t; sc.updateOcclusion(view.eye, G.me, dt2); }
   // static opaque
@@ -514,24 +493,15 @@ function render() {
     const near = Math.hypot(e.x - G.me.x, e.z - G.me.z) < 6.5 || e.isMe || e.speaking;
     const top = R.project([e.x, e.y + 1.78 * e.inst.scale, e.z]); if (!top) continue;
     let y = top[1] - 6 * sc2;
-    if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2, window.ShopData && e.cos ? (ShopData.look(e.cos) || {}).bubble : null); y += bh + 4 * sc2; }
-    if (near || e.bubble) {
-      const cs = window.ShopData && e.cos ? ShopData.look(e.cos) : null, tt = cs && cs.title;   // 商店买的称号 / 名字颜色
-      ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`;
-      const nw = ov.measureText(e.name).width, bw = e.isGM ? 42 * sc2 : 0, gap = e.isGM ? 5 * sc2 : 0, tf = Math.max(9, fs * .72);
-      let tbw = 0; if (tt) { ov.font = `800 ${tf}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; tbw = ov.measureText(tt.name).width + 10 * sc2; ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; }
-      const tg = tt ? 4 * sc2 : 0, tw = nw + bw + gap + tbw + tg + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2, pl = top[0] - tw / 2, nameCx = pl + 7 * sc2 + tbw + tg + nw / 2;
-      pill(ov, pl, ty - bh / 2, tw, bh, e.isGM ? 'rgba(43,20,82,.96)' : (e.isMe && !(cs && cs.nameColor) ? '#ffcf4a' : 'rgba(20,16,44,.78)'));
-      if (tt) { const th = bh - 4 * sc2; pill(ov, pl + 7 * sc2, ty - th / 2, tbw, th, tt.bg); ov.font = `800 ${tf}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; ov.fillStyle = tt.fg; ov.fillText(tt.name, pl + 7 * sc2 + tbw / 2, ty + 1); ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; }
-      ov.fillStyle = (cs && cs.nameColor) || (e.isMe ? '#2a1c00' : '#f4efff'); ov.fillText(e.name, nameCx, ty + 1);
-      if (e.isGM) { ov.font = `900 ${Math.max(9, fs * .72)}px system-ui,sans-serif`; ov.fillStyle = '#ffdf75'; ov.fillText('✦ GM ✦', nameCx + nw / 2 + gap + bw / 2, ty + 1); }
+    if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2); y += bh + 4 * sc2; }
+    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const nw = ov.measureText(e.name).width, bw = e.isGM ? 42 * sc2 : 0, gap = e.isGM ? 5 * sc2 : 0, tw = nw + bw + gap + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isGM ? 'rgba(43,20,82,.96)' : (e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)')); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; const left = top[0] - (bw + gap) / 2; ov.fillText(e.name, left, ty + 1); if (e.isGM) { ov.font = `900 ${Math.max(9, fs * .72)}px system-ui,sans-serif`; ov.fillStyle = '#ffdf75'; ov.fillText('✦ GM ✦', top[0] + (nw + gap) / 2, ty + 1); }
       if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }
 }
 function pill(g, x, y, w, h, fill) { g.fillStyle = fill; g.beginPath(); const r = h / 2; g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill(); }
-function bubble(g, cx, y, w, h, text, s, col) {
-  g.fillStyle = (col && col.bg) || 'rgba(255,255,255,.95)'; g.beginPath(); const x = cx - w / 2, r = 9 * s; g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.lineTo(cx + 5 * s, y + h); g.lineTo(cx, y + h + 6 * s); g.lineTo(cx - 5 * s, y + h); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill();
-  g.fillStyle = (col && col.fg) || '#251d3f'; g.fillText(text, cx, y + h / 2 + s);
+function bubble(g, cx, y, w, h, text, s) {
+  g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath(); const x = cx - w / 2, r = 9 * s; g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.lineTo(cx + 5 * s, y + h); g.lineTo(cx, y + h + 6 * s); g.lineTo(cx - 5 * s, y + h); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill();
+  g.fillStyle = '#251d3f'; g.fillText(text, cx, y + h / 2 + s);
 }
 
 /* ---------------- HUD clock ---------------- */
@@ -557,13 +527,7 @@ function bindInput() {
   // tap to move
   const gl = $('gl'); let down = null;
   const anySheetOpen = () => !!document.querySelector('.sheet:not([hidden])');
-  let camLast = null;
-  gl.addEventListener('pointerdown', e => { if (anySheetOpen()) { down = null; return; } down = [e.clientX, e.clientY, performance.now()]; camLast = [e.clientX, e.clientY]; });
-  gl.addEventListener('pointermove', e => {   // 后背视角：在画面上拖动 = 转镜头（左右）/ 抬高放低（上下）
-    if (!camLast || !backView() || anySheetOpen() || !down) return; const dx = e.clientX - camLast[0], dy = e.clientY - camLast[1]; camLast = [e.clientX, e.clientY];
-    if (Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 6) return;
-    G.cam.yaw = (G.cam.yaw || 0) - dx * .009; G.cam.pitch = Math.max(.12, Math.min(.95, G.cam.pitch - dy * .004)); G.camTouchT = performance.now();
-  });
+  gl.addEventListener('pointerdown', e => { if (anySheetOpen()) { down = null; return; } down = [e.clientX, e.clientY, performance.now()]; });
   gl.addEventListener('pointerup', e => {
     if (anySheetOpen()) { down = null; return; }
     if (!down || G.transitioning) return; const moved = Math.hypot(e.clientX - down[0], e.clientY - down[1]); down = null; if (moved > 10) return;
@@ -571,13 +535,12 @@ function bindInput() {
     { const px = e.clientX * dpr, py = e.clientY * dpr; let hit = null, hd = 1e9;   // 点到别的玩家 → 弹出菜单（组队 / 举报 / 拉黑），而不是走过去
       for (const r of G.remotes || []) { if (!r.vis || r.sx == null) continue; const d = Math.hypot(px - r.sx, py - r.sy), rad = 36 * dpr * Math.max(.85, r.inst.scale / 1.4); if (d < rad && d < hd) { hd = d; hit = r; } }
       if (hit && window.Social) { Social.openMenu(hit); return; } }
-    if (backView() && !TAP_MOVE_IN_BACK) return;   // 后背视角：关闭点地面走路
     const g = G.R.pickGround(e.clientX * dpr, e.clientY * dpr, G.me.y || 0), b = G.scene.bounds;
     G.target = fixTarget(G.scene, clamp(g[0], b.x0, b.x1), clamp(g[2], b.z0, b.z1)); G.me.stuck = 0; G.markT = 0.9;
   });
   // buttons
   $('enterBtn').onclick = interact;
-  $('viewBtn').onclick = () => { const sc = G.scene, order = sc.cameraWide ? ['orig', 'wide', 'back'] : ['orig', 'back']; G.camMode = order[(Math.max(0, order.indexOf(G.camMode)) + 1) % order.length]; store.set('camMode', G.camMode); store.set('wide', G.camMode === 'wide'); if (backView()) G.cam.yaw = G.me.yaw + Math.PI; applyView(); G.cam.target[0] = G.me.x; G.cam.target[2] = G.me.z; };
+  $('viewBtn').onclick = () => { G.wide = !G.wide; store.set('wide', G.wide); applyView(); };
   $('actions').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return; const a = b.dataset.act;
     if (a === 'pose') openActions();
@@ -585,7 +548,7 @@ function bindInput() {
     else if (a === 'chat') { $('chatIn').focus(); }
     else if (a === 'chorus') toast(G.scene.private ? '合唱：先在点歌机点歌，邀请好友后可一起上台（开发中）' : '合唱要在 KTV 大堂里使用，进去试试吧 🎤');
     else if (a === 'friends') { if (window.Friends) Friends.open(); }
-    else if (a === 'gift') { if (window.Shop) Shop.open('gift'); else toast('礼物功能加载中…'); }
+    else if (a === 'gift') toast('礼物商店：之后接入金币和道具 🎁');
   });
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; G.tab = b.dataset.ch; [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b)); renderLog(); });
   $('chatForm').addEventListener('submit', e => { e.preventDefault(); sendChat($('chatIn').value); $('chatIn').value = ''; });
@@ -631,7 +594,7 @@ async function boot() {
     G.T.coin = G.R.paint(64, 64, g => { const gr = g.createRadialGradient(24, 22, 4, 32, 32, 30); gr.addColorStop(0, '#fff3b0'); gr.addColorStop(.6, '#f4b415'); gr.addColorStop(1, '#a86a00'); g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = '#7a4f00'; g.lineWidth = 3; g.stroke(); g.fillStyle = '#b57800'; g.font = '800 30px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('★', 32, 34); }, { clamp: true });
     G.T.coinEm = G.R.paint(64, 64, g => { g.fillStyle = '#4a3000'; g.fillRect(0, 0, 64, 64); }, { clamp: true });
     text.textContent = '加载角色模型…';
-    let buf; if (window.GLB64) { const s = atob(window.GLB64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); buf = u.buffer; } else { buf = await (window.GLB_P || Promise.resolve(null)); if (!buf) buf = await (await fetch('assets/girl.glb')).arrayBuffer(); }
+    let buf; if (window.GLB64) { const s = atob(window.GLB64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); buf = u.buffer; } else buf = await (await fetch('assets/girl.glb')).arrayBuffer();
     G.model = await GLBChar.loadModel(buf, G.GR); GLBChar.addActions(G.model);
     const saved = store.get('outfit', null); G.me = makeEntity(0, 2.5, (window.Profile && Profile.name) || '我', Object.assign({}, DEFAULT_OUTFIT, saved || {}), true);
     { const st = Scenes.PLAZA_STYLES[G.style] || Scenes.PLAZA_STYLES.cozy; G.hour = QS.get('t') ? parseFloat(QS.get('t')) : st.hour; if (QS.get('t')) G.timeMode = 'x'; }
@@ -657,9 +620,8 @@ async function boot() {
     };
     requestAnimationFrame(frame);
     G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
-    // 新账号：先在创建面板里取名字 + 捏人，点「完成」后才连服务器（这样服务器收到的就是正式昵称）
-    if (store.get('new_char', false) || !(window.Profile && Profile.name)) Creator.open({ newChar: true, onDone: () => { if (window.Net) Net.start(G); } });
-    else { if (window.Net) Net.start(G); if (store.get('open_creator', false)) { store.set('open_creator', false); setTimeout(() => Creator.open(), 300); } }   // 「修改角色」：进游戏后直接打开创建面板
+    if (window.Net) Net.start(G);
+    if (store.get('new_char', false)) { store.set('new_char', false); setTimeout(() => Creator.open(), 600); }   // [创建面板] 新建角色后第一次进游戏：自动弹出创建人物面板
   } catch (err) { console.error(err); text.textContent = '加载失败：' + err.message + '（需要支持 WebGL2 的浏览器）'; }
 }
 (window.loginReady || Promise.resolve()).then(boot);
