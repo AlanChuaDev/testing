@@ -1,5 +1,8 @@
 # 更新记录
 
+## 补回被覆盖的商店代码（shop3）
+- 之前整包上传把 index.html 里加载 shop.js / shopdata.js 的那一行，和 game.js 里的「名牌称号 / 名字颜色 / 气泡颜色 / 礼物按钮」覆盖掉了，已在最新版本上补回。
+
 ## 进出日志（log1）
 - 服务器（`server.js`）新增日志：玩家进入记 `JOIN 时间(马来西亚) 昵称 类型 pub 在线人数`，离开记 `LEAVE ... stayed=停留分钟`。在 Render → Logs 里搜 JOIN / LEAVE 即可。不记 IP、不记邮箱。
 - 改了 server.js，上传后 Render 会自动重新部署（2~3 分钟）。

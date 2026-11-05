@@ -493,15 +493,24 @@ function render() {
     const near = Math.hypot(e.x - G.me.x, e.z - G.me.z) < 6.5 || e.isMe || e.speaking;
     const top = R.project([e.x, e.y + 1.78 * e.inst.scale, e.z]); if (!top) continue;
     let y = top[1] - 6 * sc2;
-    if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2); y += bh + 4 * sc2; }
-    if (near || e.bubble) { ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const nw = ov.measureText(e.name).width, bw = e.isGM ? 42 * sc2 : 0, gap = e.isGM ? 5 * sc2 : 0, tw = nw + bw + gap + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2; pill(ov, top[0] - tw / 2, ty - bh / 2, tw, bh, e.isGM ? 'rgba(43,20,82,.96)' : (e.isMe ? '#ffcf4a' : 'rgba(20,16,44,.78)')); ov.fillStyle = e.isMe ? '#2a1c00' : '#f4efff'; const left = top[0] - (bw + gap) / 2; ov.fillText(e.name, left, ty + 1); if (e.isGM) { ov.font = `900 ${Math.max(9, fs * .72)}px system-ui,sans-serif`; ov.fillStyle = '#ffdf75'; ov.fillText('✦ GM ✦', top[0] + (nw + gap) / 2, ty + 1); }
+    if (e.bubble) { ov.font = `600 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; const tw = ov.measureText(e.bubble).width + 16 * sc2, bh = 22 * sc2; y -= bh + 20 * sc2 * (near ? 1 : 0); bubble(ov, top[0], y, tw, bh, e.bubble, sc2, window.ShopData && e.cos ? (ShopData.look(e.cos) || {}).bubble : null); y += bh + 4 * sc2; }
+    if (near || e.bubble) {
+      const cs = window.ShopData && e.cos ? ShopData.look(e.cos) : null, tt = cs && cs.title;   // 商店买的称号 / 名字颜色
+      ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`;
+      const nw = ov.measureText(e.name).width, bw = e.isGM ? 42 * sc2 : 0, gap = e.isGM ? 5 * sc2 : 0, tf = Math.max(9, fs * .72);
+      let tbw = 0; if (tt) { ov.font = `800 ${tf}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; tbw = ov.measureText(tt.name).width + 10 * sc2; ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; }
+      const tg = tt ? 4 * sc2 : 0, tw = nw + bw + gap + tbw + tg + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2, pl = top[0] - tw / 2, nameCx = pl + 7 * sc2 + tbw + tg + nw / 2;
+      pill(ov, pl, ty - bh / 2, tw, bh, e.isGM ? 'rgba(43,20,82,.96)' : (e.isMe && !(cs && cs.nameColor) ? '#ffcf4a' : 'rgba(20,16,44,.78)'));
+      if (tt) { const th = bh - 4 * sc2; pill(ov, pl + 7 * sc2, ty - th / 2, tbw, th, tt.bg); ov.font = `800 ${tf}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; ov.fillStyle = tt.fg; ov.fillText(tt.name, pl + 7 * sc2 + tbw / 2, ty + 1); ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; }
+      ov.fillStyle = (cs && cs.nameColor) || (e.isMe ? '#2a1c00' : '#f4efff'); ov.fillText(e.name, nameCx, ty + 1);
+      if (e.isGM) { ov.font = `900 ${Math.max(9, fs * .72)}px system-ui,sans-serif`; ov.fillStyle = '#ffdf75'; ov.fillText('✦ GM ✦', nameCx + nw / 2 + gap + bw / 2, ty + 1); }
       if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }
 }
 function pill(g, x, y, w, h, fill) { g.fillStyle = fill; g.beginPath(); const r = h / 2; g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill(); }
-function bubble(g, cx, y, w, h, text, s) {
-  g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath(); const x = cx - w / 2, r = 9 * s; g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.lineTo(cx + 5 * s, y + h); g.lineTo(cx, y + h + 6 * s); g.lineTo(cx - 5 * s, y + h); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill();
-  g.fillStyle = '#251d3f'; g.fillText(text, cx, y + h / 2 + s);
+function bubble(g, cx, y, w, h, text, s, col) {
+  g.fillStyle = (col && col.bg) || 'rgba(255,255,255,.95)'; g.beginPath(); const x = cx - w / 2, r = 9 * s; g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.lineTo(cx + 5 * s, y + h); g.lineTo(cx, y + h + 6 * s); g.lineTo(cx - 5 * s, y + h); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill();
+  g.fillStyle = (col && col.fg) || '#251d3f'; g.fillText(text, cx, y + h / 2 + s);
 }
 
 /* ---------------- HUD clock ---------------- */
@@ -548,7 +557,7 @@ function bindInput() {
     else if (a === 'chat') { $('chatIn').focus(); }
     else if (a === 'chorus') toast(G.scene.private ? '合唱：先在点歌机点歌，邀请好友后可一起上台（开发中）' : '合唱要在 KTV 大堂里使用，进去试试吧 🎤');
     else if (a === 'friends') { if (window.Friends) Friends.open(); }
-    else if (a === 'gift') toast('礼物商店：之后接入金币和道具 🎁');
+    else if (a === 'gift') { if (window.Shop) Shop.open('gift'); else toast('礼物功能加载中…'); }
   });
   $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; G.tab = b.dataset.ch; [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b)); renderLog(); });
   $('chatForm').addEventListener('submit', e => { e.preventDefault(); sendChat($('chatIn').value); $('chatIn').value = ''; });
