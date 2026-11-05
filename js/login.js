@@ -30,7 +30,6 @@ function startNew() {
   lsSet('sc_profile', profile); lsSet('sc_new_char', true); enter();
 }
 $('lgEnter').onclick = enter;
-$('lgNew').onclick = () => { lsSet('sc_open_creator', true); enter(); };   // 「修改角色」：进游戏后直接打开创建面板
 
 /* ---------- 登录门槛：必须用 ID+密码 或 Google 登录，才能进入游戏 ---------- */
 let authOK = false, authMode = 'in', authBusy = false;
