@@ -1,13 +1,16 @@
 CHANGELOG.md
 README.md
 assets/girl.glb
+assets/music/ballroom.mp3
 assets/music/beach.mp3
 assets/music/bukit.mp3
+assets/music/chapel.mp3
 assets/music/funfair.mp3
 assets/music/klcc.mp3
 assets/music/mall.mp3
 assets/music/merdeka.mp3
 assets/music/plaza.mp3
+assets/music/wedding.mp3
 assets/songs/aiwohaishita.lrc
 assets/songs/aiwohaishita.mp3
 assets/songs/caihong.lrc
@@ -81,6 +84,7 @@ js/outfit.js
 js/plaza.js
 js/profile.js
 js/scene-bukit-bintang.js
+js/scene-chapel.js
 js/scene-common.js
 js/scene-klcc.js
 js/scene_beach.js

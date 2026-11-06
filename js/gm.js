@@ -71,7 +71,7 @@ function refreshPage() {
   if (!isGM || !window.Net) return;
   if (page === 'overview') Net.send({ type: 'gm_overview' });
   else if (page === 'reports') Net.send({ type: 'gm_reports' });
-  else if (page === 'players' || page === 'server' || page === 'profile' || page === 'teleport') Net.send({ type: 'gm_players' });
+  else if (page === 'players' || page === 'server' || page === 'profile' || page === 'teleport') { Net.send({ type: 'gm_players' }); if (page === 'server') Net.send({ type: 'gm_bans' }); }
   else if (page === 'settings') Net.send({ type: 'gm_action_log' });
 }
 function show(p) {
@@ -318,6 +318,23 @@ function bind() {
     setTimeout(() => Net.send({ type: 'gm_players' }), 400);
   });
 
+  /* 封号 / 送金币（个人资料页 + 全服管理页共用） */
+  const gmTarget = b => { const inProfile = !!b.closest('#gmPage-profile'); if (inProfile) { if (!sel || !sel.pid || sel.offline) { consoleMsg('玩家不在线，无法操作'); return null; } return { pid: sel.pid, name: sel.name || '玩家' }; } const pid = $('gmSvPlayer').value; if (!pid) { consoleMsg('先选择一位在线玩家'); return null; } const p = players.find(x => x.pid === pid); return { pid, name: p ? p.name : '该玩家' }; };
+  const banLabel = m => m === 0 ? '永久' : m >= 1440 ? m / 1440 + ' 天' : m >= 60 ? m / 60 + ' 小时' : m + ' 分钟';
+  document.querySelectorAll('[data-ban]').forEach(b => b.onclick = () => {
+    const t = gmTarget(b); if (!t) return; const mins = Number(b.dataset.ban);
+    if (!confirm('确定封号 ' + t.name + '（' + banLabel(mins) + '）？\n封号后他会被立刻踢下线，时间到了自动解封。')) return;
+    Net.send({ type: 'gm_action', pid: t.pid, action: 'ban', minutes: mins }); setTimeout(() => { Net.send({ type: 'gm_players' }); Net.send({ type: 'gm_bans' }); }, 500);
+  });
+  document.querySelectorAll('[data-coin]').forEach(b => b.onclick = () => {
+    const t = gmTarget(b); if (!t) return;
+    let n = b.dataset.coin === 'custom' ? Math.round(Number(b.parentElement.querySelector('.gmCoinIn').value)) : Number(b.dataset.coin);
+    if (!Number.isFinite(n) || n < 1 || n > 100000) return consoleMsg('金币数要在 1 ~ 100000 之间');
+    if (n >= 10000 && !confirm('确定送给 ' + t.name + ' ' + n + ' 金币？')) return;
+    Net.send({ type: 'gm_action', pid: t.pid, action: 'coins', amount: n });
+  });
+  $('gmBanRefresh').onclick = () => Net.send({ type: 'gm_bans' });
+
   /* GM 设置 */
   $('gmRefreshAudit').onclick = () => Net.send({ type: 'gm_action_log' });
 
@@ -332,6 +349,16 @@ function bind() {
   Net.on('gmLoggedOut', () => loggedOut(true));
   Net.on('gmError', m => { msg('❌ ' + (m.message || '出错了')); consoleMsg('❌ ' + (m.message || '出错了')); if (m.code === 'auth') { loggedOut(); loginMsg(m.message || ''); } });
   Net.on('gmActionResult', m => { const t = m.message || (m.ok ? '操作成功' : '操作失败'); consoleMsg((m.ok ? '✅ ' : '❌ ') + t); if (window.__game && __game.api) __game.api.toast(t, 2200); });
+  Net.on('gmBans', m => {
+    const root = $('gmBanList'); if (!root) return; root.replaceChildren();
+    const list = m.list || []; if (!list.length) { root.appendChild(node('p', 'hint', '没有被封号的玩家')); return; }
+    list.forEach(b => {
+      const c = node('div', 'gmListItem'); c.style.cursor = 'default';
+      c.append(node('strong', '', b.name || '玩家'), node('div', 'sub', (b.until ? '到 ' + fmtAt(b.until) : '永久') + ' · 由 ' + (b.by || 'GM') + ' 封 · ID ' + String(b.pub || '').slice(0, 7)));
+      const row = node('div', 'gmRow'); gmBtn(row, '解封', () => { if (confirm('确定解封 ' + (b.name || '该玩家') + '？')) Net.send({ type: 'gm_unban', pub: b.pub }); });
+      c.appendChild(row); root.appendChild(c);
+    });
+  });
   Net.on('gmOverview', renderOverview);
   Net.on('gmPlayers', m => { players = m.list || []; setInvUI(!!m.invisible); renderPlayers(); syncSelection(); if (page === 'server') renderServer(); });
   Net.on('gmReports', m => { reports = m.list || []; renderReports(); });

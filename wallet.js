@@ -41,6 +41,11 @@ function create({ store }) {
     return { ok: true, applied: n, capped: n < delta };
   }
 
+  /* GM 送金币：不受每天赚钱上限 / 单次上限限制；调用方（server.js）负责验证 GM 身份和单次数额上限 */
+  async function grant(pub, n) {
+    n = Math.round(Number(n) || 0); if (!Number.isSafeInteger(n) || n <= 0) throw new Error("数额不对");
+    const d = await load(pub); d.coins += n; await save(pub, d); return d.coins;
+  }
   async function signIn(pub) {
     const d = await load(pub), t = dayOf();
     if (d.signDay === t) return { done: true };
@@ -75,6 +80,6 @@ function create({ store }) {
     await save(from, a); await save(to, b); return g;
   }
 
-  return { view, apply, signIn, buy, equip, equipOf, gift, EARN_CAP, MAX_EVENT, START_COINS, dayOf };
+  return { view, apply, grant, signIn, buy, equip, equipOf, gift, EARN_CAP, MAX_EVENT, START_COINS, dayOf };
 }
 module.exports = { create, EARN_CAP, MAX_EVENT, START_COINS };

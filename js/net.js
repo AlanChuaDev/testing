@@ -87,6 +87,16 @@ function kick() {     // 回到前台 / 网络恢复：不用等退避，马上�
   if (!ws || ws.readyState > 1) { retry = 0; clearTimeout(retryT); connect(); }
   else if (ws.readyState === 1 && Date.now() - lastRx > 15000) { try { ws.close(); } catch (e) {} }
 }
+function showBanned(m) {            // 被 GM 封号：盖一层提示，不自动重连
+  if (document.getElementById('kickedBox')) return;
+  const box = document.createElement('div'); box.id = 'kickedBox';
+  box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(10,8,30,.92);color:#fff;font-family:inherit;text-align:center;padding:24px';
+  const card = document.createElement('div'); card.style.cssText = 'max-width:340px';
+  const t = document.createElement('div'); t.textContent = '🚫 这个账号已被封禁'; t.style.cssText = 'font-size:18px;font-weight:700;margin-bottom:8px';
+  const p = document.createElement('div'); let when = '永久封号'; try { if (m && m.until) when = '解封时间：' + new Date(m.until).toLocaleString('zh-CN', { hour12: false }); } catch (e) {}
+  p.textContent = when + '。如有疑问，请联系管理员。'; p.style.cssText = 'font-size:14px;opacity:.85;line-height:1.6';
+  card.append(t, p); box.append(card); document.body.appendChild(box);
+}
 function showKicked(reason) {       // 被顶号：盖一层提示，点按钮才重新连接（会把另一处顶下去）
   if (document.getElementById('kickedBox')) return;
   const box = document.createElement('div'); box.id = 'kickedBox';
@@ -120,6 +130,7 @@ function onMsg(m) {
     case 'connected': myId = m.playerId; break;
     case 'hello_ok': myPub = m.pub || ''; break;
     case 'kicked': kickedOut = true; showKicked(m.reason); break;
+    case 'banned': kickedOut = true; showBanned(m); break;
     case 'pong': {
       const t1 = Date.now(), rtt = t1 - m.t;
       if (rtt < bestRtt * 1.3 + 10) { offset = m.ts - (m.t + rtt / 2); bestRtt = Math.min(bestRtt, rtt); }
@@ -182,7 +193,7 @@ function applyState(e, s, snap) {
   } else if (e.sit) { e.sit = null; e.sitP = 1; }
   if (snap) { e.x = s.x; e.z = s.z; e.y = s.y; }
 }
-const POSES = ['wave', 'dance', 'cheer', 'clap', 'signok', 'signno', 'photo', 'bow', 'heart', 'thumbs', 'point'];   // 远程玩家只允许这些动作名（服务器只限制了长度）
+const POSES = ['wave', 'dance', 'cheer', 'clap', 'signok', 'signno', 'photo', 'bow', 'heart', 'thumbs', 'point', 'sit_rf', 'sit_rc', 'sit_ru', 'sit_rs', 'rh'];   // 远程玩家只允许这些动作名（服务器只限制了长度）   // 远程玩家只允许这些动作名（服务器只限制了长度）
 function frame(now) {
   requestAnimationFrame(frame);
   if (!G || !remotes.size) return;

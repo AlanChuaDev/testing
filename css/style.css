@@ -408,3 +408,7 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 .sheet,.sheet *,#log,#login,#login *{touch-action:pan-y}
 #gmPanel .gmNav,#gmPanel .gmNav *{touch-action:pan-x pan-y}
 
+
+/* GM 名字：金紫粉彩虹，一直流动变色 */
+.gm-name{font-weight:800;background:linear-gradient(90deg,#ff6ec7,#ffd86e,#7bf0ff,#b57bff,#ff6ec7);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:gmflow 3s linear infinite}
+@keyframes gmflow{to{background-position:300% 0}}

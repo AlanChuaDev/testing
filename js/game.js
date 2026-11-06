@@ -39,7 +39,7 @@ function addMsg(ch, name, text, me, sys, isGM) {
 }
 function appendLog(m) {
   const log = $('log'), d = document.createElement('div'); d.className = 'm' + (m.me ? ' me' : '') + (m.sys ? ' sys' : '');
-  if (m.sys) d.textContent = m.text; else { if (m.isGM) { const badge = document.createElement('span'); badge.className = 'gm-badge'; badge.textContent = '✦ GM ✦'; d.append(badge, ' '); } const b = document.createElement('b'); b.textContent = m.name; d.append(b, ': ' + m.text); }
+  if (m.sys) d.textContent = m.text; else { if (m.isGM) { const badge = document.createElement('span'); badge.className = 'gm-badge'; badge.textContent = '✦ GM ✦'; d.append(badge, ' '); } const b = document.createElement('b'); b.textContent = m.name; if (m.isGM) b.className = 'gm-name'; d.append(b, ': ' + m.text); }
   const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 12; log.appendChild(d); while (log.children.length > 80) log.removeChild(log.firstChild); if (stick) log.scrollTop = log.scrollHeight;
 }
 function renderLog() { $('log').innerHTML = ''; G.chat[G.tab].forEach(appendLog); $('log').scrollTop = 1e9; }
@@ -109,9 +109,9 @@ function randomSpot(sc) { for (let k = 0; k < 40; k++) { const r = sc.npcRect, x
 
 /* ---------------- scene switching ---------------- */
 /* ======================= integration glue (maps <-> hub, seats, interactions, buttons) ======================= */
-const HUB = [['plaza', '星光广场', '⭐'], ['merdeka', '独立广场', '🏛️'], ['bukit', '武吉免登', '🌃'], ['klcc', 'KLCC 双子塔', '🏙️'], ['beach', '星光海滩', '🏖️'], ['funfair', '星光嘉年华', '🎡']];   // KTV / 试衣间 are buildings inside the plaza, not hub maps
+const HUB = [['plaza', '星光广场', '⭐'], ['merdeka', '独立广场', '🏛️'], ['bukit', '武吉免登', '🌃'], ['klcc', 'KLCC 双子塔', '🏙️'], ['beach', '星光海滩', '🏖️'], ['funfair', '星光嘉年华', '🎡'], ['chapel', '星光教堂 · 婚礼庄园', '💒']];   // KTV / 试衣间 are buildings inside the plaza, not hub maps
 const HUB_DROP = { klcc: ['to_bukit', 'monorail_k'], bukit: ['monorail'], beach: ['plaza'], funfair: ['plaza'], merdeka: ['plaza'] };   // each map's own travel portals -> replaced by ONE hub portal
-const HUB_AT = { plaza: [-10, 10] };
+const HUB_AT = { plaza: [-10, 10], chapel: [12, 72] };
 /* 动作菜单：c=动画名（也是联机同步用的名字，最长 12 个字符，且必须写进 net.js 的 POSES）  t=持续秒数  b=头顶气泡  sit=坐着能不能做
    ✔ 和 ❌ 放在最前面。 */
 const ACTIONS = [
@@ -129,7 +129,7 @@ const ACTIONS = [
 ];
 function pay(c, ok, msg) { if (G.coinCount < c) { toast('金币不够啦（需要 ' + c + '）'); return false; } setCoins(G.coinCount - c); toast(ok, 2400); if (msg) setBubble(G.me, msg); return true; }
 function addSeat(sc, x, z, yaw, h) { const ap = [x + Math.sin(yaw) * 1.15, z + Math.cos(yaw) * 1.15], q = { x, z, yaw, h, ap, who: null, res: null }; q.hot = { id: 'sit', seat: q, x: ap[0], z: ap[1], r: 1.4 }; (sc.seats = sc.seats || []).push(q); return q; }
-const PORTAL_UI = { boutique: ['👗', '试衣间'], ktv: ['🎤', 'K歌厅'], pavilion: ['🛍️', '商场'], plaza: ['🚪', '回广场'] };
+const PORTAL_UI = { chapel: ['⛪', '星光教堂'], chapel_in: ['⛪', '教堂大殿'], chapel_hall: ['🥂', '宴会厅'], boutique: ['👗', '试衣间'], ktv: ['🎤', 'K歌厅'], pavilion: ['🛍️', '商场'], plaza: ['🚪', '回广场'] };
 function setEnter(best) {   // the yellow button lives above the six action buttons: grey + unclickable unless something is in range
   const b = $('enterBtn'), tx = $('enterText'), ic = $('enterIcon'); if (!b) return;
   b.disabled = !best;
@@ -200,7 +200,7 @@ function glueScene(id, sc) {
 }
 
 function getScene(id) {
-  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'merdeka' && Scenes.makeMerdeka ? Scenes.makeMerdeka(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
+  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'chapel' && Scenes.makeChapel ? Scenes.makeChapel(G.R, G.T) : id === 'chapel_in' && Scenes.makeChapelIn ? Scenes.makeChapelIn(G.R, G.T) : id === 'chapel_hall' && Scenes.makeChapelHall ? Scenes.makeChapelHall(G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'merdeka' && Scenes.makeMerdeka ? Scenes.makeMerdeka(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
   if (!G.scenes[id]._glued) { G.scenes[id]._glued = true; glueScene(id, G.scenes[id]); }
   return G.scenes[id];
 }
@@ -544,7 +544,9 @@ function render() {
       const tg = tt ? 4 * sc2 : 0, tw = nw + bw + gap + tbw + tg + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2, pl = top[0] - tw / 2, nameCx = pl + 7 * sc2 + tbw + tg + nw / 2;
       pill(ov, pl, ty - bh / 2, tw, bh, e.isGM ? 'rgba(43,20,82,.96)' : (e.isMe && !(cs && cs.nameColor) ? '#ffcf4a' : 'rgba(20,16,44,.78)'));
       if (tt) { const th = bh - 4 * sc2; pill(ov, pl + 7 * sc2, ty - th / 2, tbw, th, tt.bg); ov.font = `800 ${tf}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; ov.fillStyle = tt.fg; ov.fillText(tt.name, pl + 7 * sc2 + tbw / 2, ty + 1); ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; }
-      ov.fillStyle = (cs && cs.nameColor) || (e.isMe ? '#2a1c00' : '#f4efff'); ov.fillText(e.name, nameCx, ty + 1);
+      let nameFill = (cs && cs.nameColor) || (e.isMe ? '#2a1c00' : '#f4efff');
+      if (e.isGM) { const gr = ov.createLinearGradient(nameCx - nw / 2, 0, nameCx + nw / 2, 0), h0 = G.t * 70; for (let gi = 0; gi <= 4; gi++) gr.addColorStop(gi / 4, 'hsl(' + ((h0 + gi * 72) % 360).toFixed(0) + ',100%,72%)'); nameFill = gr; }   // GM 名字：彩虹渐变一直流动
+      ov.fillStyle = nameFill; ov.fillText(e.name, nameCx, ty + 1);
       if (e.isGM) { ov.font = `900 ${Math.max(9, fs * .72)}px system-ui,sans-serif`; ov.fillStyle = '#ffdf75'; ov.fillText('✦ GM ✦', nameCx + nw / 2 + gap + bw / 2, ty + 1); }
       if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }

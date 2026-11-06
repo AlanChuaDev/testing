@@ -17,9 +17,9 @@ function vnoise(x, z) { const xi = Math.floor(x), zi = Math.floor(z), xf = x - x
    地图形状：一个"肾形"的大公园 + 东北角的湖（全部是函数，所以边界是弯的）
    x→右  z→朝镜头(南)  -z→远处（摩天轮、过山车、湖、城市天际线）
    ===================================================================== */
-const CX = 0, CZ = 4, RX = 66, RZ = 42;
-function rfun(x, z) { const dx = (x - CX) / RX, dz = (z - CZ) / RZ, a = Math.atan2(dz, dx); return Math.hypot(dx, dz) / (1 + .07 * Math.sin(3 * a + 1) + .04 * Math.sin(5 * a + 2)); }
-const LAKE = { x: 36, z: -38, rx: 28, rz: 13 };
+const CX = 0, CZ = 4, RX = 66, RZ = 42, RZN = 56;
+function rfun(x, z) { const dx = (x - CX) / RX, dz = (z - CZ) / (z < CZ ? RZN : RZ), a = Math.atan2(dz, dx); return Math.hypot(dx, dz) / (1 + .07 * Math.sin(3 * a + 1) + .04 * Math.sin(5 * a + 2)); }
+const LAKE = { x: 36, z: -52, rx: 28, rz: 13 };
 const lakeF = (x, z) => Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
 const inside = (x, z) => rfun(x, z) < 1 && lakeF(x, z) > 1.12;
 function H(x, z) {
@@ -46,7 +46,7 @@ function ribbon(mb, pts, w, y, uvS, col) {
   for (let i = 0; i < n; i++) {
     const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)]; let dx = b[0] - a[0], dz = b[1] - a[1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
     if (i) acc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-    mb.vert([pts[i][0] - dz * w / 2, y, pts[i][1] + dx * w / 2], [0, 1, 0], acc / uvS, 0, col || [1, 1, 1]); mb.vert([pts[i][0] + dz * w / 2, y, pts[i][1] - dx * w / 2], [0, 1, 0], acc / uvS, w / uvS, col || [1, 1, 1]);
+    { const ax = pts[i][0] - dz * w / 2, az = pts[i][1] + dx * w / 2, bx = pts[i][0] + dz * w / 2, bz = pts[i][1] - dx * w / 2; mb.vert([ax, y, az], [0, 1, 0], ax / uvS, az / uvS, col || [1, 1, 1]); mb.vert([bx, y, bz], [0, 1, 0], bx / uvS, bz / uvS, col || [1, 1, 1]); }
   }
   for (let i = 0; i < n - 1; i++) { const a = base + i * 2; mb.i.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
 }
@@ -110,6 +110,8 @@ function fanZ(mb, cx, cy, cz, r, col, a0, a1, seg) { const c = mb.vert([cx, cy, 
 /* 样条（三维）：Catmull-Rom，闭合 */
 function cromLoop3(pts, seg) { const n = pts.length, out = []; for (let i = 0; i < n; i++) { const p0 = pts[(i + n - 1) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n]; for (let k = 0; k < seg; k++) { const t = k / seg, t2 = t * t, t3 = t2 * t; out.push([0, 1, 2].map(c => .5 * ((2 * p1[c]) + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3))); } } return out; }
 
+function shiftZ(mb, dz) { for (let k = 2; k < mb.v.length; k += 11) mb.v[k] += dz; }
+function pdisc(mb, cx, cz, y, r, seg, tile) { const c = mb.vert([cx, y, cz], [0, 1, 0], cx / tile, cz / tile, [1, 1, 1]), b = mb.n; for (let k = 0; k <= seg; k++) { const a = k / seg * TAU, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; mb.vert([x, y, z], [0, 1, 0], x / tile, z / tile, [1, 1, 1]); } for (let k = 0; k < seg; k++) mb.i.push(c, b + k + 1, b + k); }
 function nrm3(v) { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }
 function xfBasis(dst, src, p, T, U, sc) {
   sc = sc || 1; const X = nrm3([U[1] * T[2] - U[2] * T[1], U[2] * T[0] - U[0] * T[2], U[0] * T[1] - U[1] * T[0]]), base = dst.n;
@@ -240,7 +242,7 @@ function makeFunfair(R, T) {
     c = mix(c, [.5, .46, .44], sstep(.7, 1.2, slope) * sstep(1.5, 4, h));
     const k = .92 + .16 * n; return [c[0] * k, c[1] * k, c[2] * k];
   }
-  { const xs = axis(-80, 80, 1.6, -320, 320), zs = axis(-56, 62, 1.6, -320, 160), W = xs.length, mb = new MB();
+  { const xs = axis(-80, 80, 1.6, -320, 320), zs = axis(-78, 62, 1.6, -320, 160), W = xs.length, mb = new MB();
     for (let j = 0; j < zs.length; j++) for (let i = 0; i < W; i++) {
       const x = xs[i], z = zs[j], h = H(x, z), e = .8, dx = (H(x + e, z) - H(x - e, z)) / (2 * e), dz = (H(x, z + e) - H(x, z - e)) / (2 * e), nl = Math.hypot(dx, 1, dz);
       mb.vert([x, h, z], [-dx / nl, 1 / nl, -dz / nl], x / 6, z / 6, terrainCol(x, z, h, Math.hypot(dx, dz)));
@@ -260,20 +262,27 @@ function makeFunfair(R, T) {
     upload(bLake, mb);
   }
   function upload(b, mb) {
-    const gl = R.gl; gl.bindVertexArray(b.vao); gl.bindBuffer(gl.ARRAY_BUFFER, b.buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mb.v), gl.DYNAMIC_DRAW);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b.idx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(mb.i), gl.DYNAMIC_DRAW); b.count = mb.i.length; gl.bindVertexArray(null);
+    /* 动态几何：复用类型数组（少产生垃圾回收），整块重传 */
+    const gl = R.gl; gl.bindVertexArray(b.vao);
+    const nv = mb.v.length, ni = mb.i.length;
+    if (!b.fv || b.fv.length < nv) { b.fv = new Float32Array(Math.max(1024, Math.ceil(nv * 1.5))); b.vcap = 0; }
+    if (!b.fi || b.fi.length < ni) { b.fi = new Uint32Array(Math.max(1024, Math.ceil(ni * 1.5))); b.icap = 0; }
+    for (let k = 0; k < nv; k++) b.fv[k] = mb.v[k]; for (let k = 0; k < ni; k++) b.fi[k] = mb.i[k];
+    gl.bindBuffer(gl.ARRAY_BUFFER, b.buf); gl.bufferData(gl.ARRAY_BUFFER, b.fv.subarray(0, nv), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b.idx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, b.fi.subarray(0, ni), gl.DYNAMIC_DRAW);
+    b.count = ni; gl.bindVertexArray(null);
   }
 
   /* ---------- 道路与广场（彩砖） ---------- */
   { const mb = new MB();
-    mb.disc(FOUNT.x, FOUNT.z, .006, 13, 48, [1, 1, 1]);                                                  // 喷泉广场
-    mb.disc(CAR.x, CAR.z, .012, 8.5, 32, [1, .95, 1]); mb.disc(WHEEL.x, WHEEL.z + 3, .018, 9, 32, [1, 1, .95]); mb.disc(COAST.cx, 2, .024, 8, 32, [.97, .97, 1]);
-    let pathN = 0; const path = (pts, w, tag) => { const dense = crom(pts, 8); PATHDEF.push(Object.assign({ pts: dense, w }, tag || {})); ribbon(mb, dense, w, .028 + .003 * (pathN++), 4); };
+    pdisc(mb, FOUNT.x, FOUNT.z, .02, 13, 56, 4);                                                  // 喷泉广场
+    pdisc(mb, CAR.x, CAR.z, .02, 8.5, 40, 4); pdisc(mb, WHEEL.x, WHEEL.z + 3, .02, 9, 40, 4); pdisc(mb, COAST.cx, 2, .02, 8, 40, 4);
+    let pathN = 0; const path = (pts, w, tag) => { const dense = crom(pts, 8); PATHDEF.push(Object.assign({ pts: dense, w }, tag || {})); ribbon(mb, dense, w, .024 + .0007 * (pathN++), 4); };
     path([[-56, 25.7], [-30, 25.7], [0, 25.7], [30, 25.7], [58, 25.7]], 10.6, { street: 1 });               // 摊位街（东西向主街）
     path([[0, 8], [0, 18], [0, 25.7]], 7);                                                                  // 喷泉 → 摊位街
     path([[0, 8], [-8, -2], [-16, -12]], 6.5); path([[0, 8], [3, -2], [6, -8]], 6);                       // → 摩天轮 / 旋转木马
     path([[0, 8], [14, 6], [30, 3]], 6.5);                                                                // → 过山车
-    path([[0, 8], [-18, 10], [-33, 5], [-40, -2.5]], 6.5); mb.disc(-40, -4.8, .021, 5.2, 28, [1, .97, 1]);                                                             // → 鬼屋
+    path([[0, 8], [-18, 10], [-33, 5], [-40, -2.5]], 6.5); pdisc(mb, -40, -4.8, .02, 5.2, 32, 4);                                                             // → 鬼屋
     add(mb, { tex: X.pave }); }
 
   /* ---------- 喷泉 ---------- */
@@ -290,7 +299,7 @@ function makeFunfair(R, T) {
 
   /* ---------- 摊位工厂（门面朝 +z 也就是朝镜头） ---------- */
   const HS = [], strGlow = new MB(); let awnings = {}, wood = new MB(), signs = [], strLights = new MB(), grpN = null;
-  function flushGroup() { if (grpN == null) return; add(wood, {}); Object.values(awnings).forEach(a => add(a.mb, a.em ? { tex: a.tex, em: a.em, emDay: a.emDay, emNight: a.emNight } : { tex: a.tex })); signs.forEach(s => add(s.mb, { tex: s.tex, em: s.em, emDay: .45, emNight: 1.7 })); add(strLights, emS('#ffffff', .6, 2.2)); add(glowL, emS('#ffe9b0', .7, 2.4)); occ1(grpN); grpN = null; }
+  function flushGroup() { if (grpN == null) return; add(wood, {}); Object.values(awnings).forEach(a => add(a.mb, a.em ? { tex: a.tex, em: a.em, emDay: a.emDay, emNight: a.emNight } : { tex: a.tex })); signs.forEach(s => add(s.mb, { tex: s.tex, em: s.em, emDay: .45, emNight: 1.3 })); add(strLights, emS('#ffffff', .6, 2.2)); add(glowL, emS('#ffe9b0', .7, 2.4)); occ1(grpN); grpN = null; }
   let glowL = new MB();
   function newGroup() { flushGroup(); awnings = {}; wood = new MB(); signs = []; strLights = new MB(); glowL = new MB(); grpN = occ0(); }
   function awn(name, c1, c2) { return awnings[name] || (awnings[name] = { mb: new MB(), tex: X.stripe(c1, c2) }); }
@@ -299,15 +308,15 @@ function makeFunfair(R, T) {
     newGroup(); const d = 2.8, col = o.col || [.9, .55, .6], aw = awn(o.awn[0], o.awn[1], o.awn[2]), cA = PAL[o.pi || 0], cream = [1, .96, .9], gold = [.98, .8, .3];
     /* 柜台：木板立面 + 金边 + 台面外挑 */
     wood.box(x - w / 2, 0, z - .1, x + w / 2, 1.05, z + .55, col); const nb = Math.round(w / .9); for (let i = 0; i <= nb; i++) { const bx = x - w / 2 + i * w / nb; wood.box(bx - .05, .08, z + .55, bx + .05, .98, z + .6, cream); }
-    wood.box(x - w / 2 - .1, 1.05, z - .15, x + w / 2 + .1, 1.16, z + .65, cream); wood.box(x - w / 2 - .12, .0, z + .5, x + w / 2 + .12, .1, z + .62, gold); wood.box(x - w / 2 - .12, .95, z + .5, x + w / 2 + .12, 1.05, z + .62, gold);
+    wood.box(x - w / 2 - .1, 1.05, z - .15, x + w / 2 + .1, 1.16, z + .65, cream); wood.box(x - w / 2 - .12, .0, z + .5, x + w / 2 + .12, .1, z + .7, gold); wood.box(x - w / 2 - .12, .93, z + .5, x + w / 2 + .12, 1.03, z + .7, gold);
     for (let i = 0; i < nb; i++) { const bx = x - w / 2 + (i + .5) * w / nb; wood.sphere(bx, .52, z + .62, .2, .2, .04, i % 2 ? cA : [1, 1, 1], 5); }
-    wood.box(x - w / 2, 0, z - d, x + w / 2, 3.4, z - d + .2, mul(col, .85)); wood.box(x - w / 2, 0, z - d, x - w / 2 + .15, 3.4, z + .1, mul(col, .9)); wood.box(x + w / 2 - .15, 0, z - d, x + w / 2, 3.4, z + .1, mul(col, .9));
+    wood.box(x - w / 2 + .15, 0, z - d, x + w / 2 - .15, 3.4, z - d + .2, mul(col, .85)); wood.box(x - w / 2 - .02, 0, z - d, x - w / 2 + .15, 3.4, z + .1, mul(col, .9)); wood.box(x + w / 2 - .15, 0, z - d, x + w / 2 + .02, 3.4, z + .1, mul(col, .9));
     for (let i = 1; i < 4; i++) wood.box(x - w / 2 + .15, i * .8, z - d + .2, x + w / 2 - .15, i * .8 + .05, z - d + .25, mul(col, .7));
     /* 四角：糖果柱 */
     [[x - w / 2 - .05, z + .55], [x + w / 2 + .05, z + .55], [x - w / 2 - .05, z - d + .1], [x + w / 2 + .05, z - d + .1]].forEach(([px, pz], k) => { for (let q = 0; q < 9; q++) wood.cyl(px, pz, q * .34, q * .34 + .34, .15, .15, 8, q % 2 ? [1, 1, 1] : cA); wood.sphere(px, 3.15, pz, .22, .22, .22, gold, 6); });
     /* 顶棚：条纹斜面 + 扇贝垂边 + 脊线 + 灯笼 */
     aw.mb.quad([x - w / 2 - .2, 3.0, z + 1.4], [x + w / 2 + .2, 3.0, z + 1.4], [x + w / 2 + .2, 3.7, z - d], [x - w / 2 - .2, 3.7, z - d], [0, .9, .4], [0, 0, w / 1.2, 1], [1, 1, 1]);
-    const n = Math.max(6, Math.round(w / .5)), sw = (w + .4) / n; for (let i = 0; i < n; i++) { const cx = x - w / 2 - .2 + (i + .5) * sw; fanZ(wood, cx, 3.0, z + 1.43, sw * .52, i % 2 ? [1, 1, 1] : cA, PI, TAU, 8); wood.box(cx - sw * .5, 3.0, z + 1.38, cx + sw * .5, 3.07, z + 1.48, i % 2 ? [1, 1, 1] : cA); }
+    const n = Math.max(6, Math.round(w / .5)), sw = (w + .4) / n; for (let i = 0; i < n; i++) { const cx = x - w / 2 - .2 + (i + .5) * sw; fanZ(wood, cx, 3.0, z + 1.43, sw * .52, i % 2 ? [1, 1, 1] : cA, PI, TAU, 8); }
     wood.box(x - w / 2 - .25, 3.6, z - d - .05, x + w / 2 + .25, 3.82, z - d + .2, gold); wood.box(x - w / 2 - .22, 2.95, z + 1.36, x + w / 2 + .22, 3.04, z + 1.5, gold);
     for (let i = 0; i <= n; i++) { const bx = x - w / 2 - .2 + i * sw; strLights.sphere(bx, 2.62, z + 1.58, .09, .09, .09, [1, 1, 1], 4); bb(strGlow, bx, 2.62, z + 1.58, .8, .8, PAL[(i + (o.pi || 0)) % PAL.length]); }
     [-1, 1].forEach(s => { const lx = x + s * (w / 2 - .25), lz = z + 1.2; tube(wood, [[lx, 3.0, lz], [lx, 2.55, lz]], .015, 3, [.5, .4, .2]); wood.sphere(lx, 2.35, lz, .2, .26, .2, [1, .45, .35], 6); glowL.sphere(lx, 2.35, lz, .17, .22, .17, [1, .85, .5], 6); bb(strGlow, lx, 2.35, lz, 1.2, 1.2, [1, .6, .3]); });
@@ -325,10 +334,10 @@ function makeFunfair(R, T) {
   const topRing = (x, z) => { const zz = z - 1.9; wood.cyl(x, zz, 5.2, 9.2, .14, .1, 6, [.9, .9, .95]); for (let i = 0; i < 6; i++) ring3(wood, x, 5.7 + i * .6, zz, 1.75 - i * .22, .21, PAL[i % 6], 'y', 26); wood.sphere(x, 9.5, zz, .38, .38, .38, gold0, 6); [-1, 1].forEach(s => { for (let k = 0; k < 3; k++) wood.sphere(x + s * (2.8 + k * .55), 5.55 + k * .35, zz, .3, .3, .3, PAL[(k + 2) % 6], 5); }); };
   const topBalloon = (x, z) => { const zz = z - 1.9, cs = [[0, 8.2, 0], [-.9, 7.4, .3], [.9, 7.5, -.2], [-.4, 6.8, -.6], [.5, 6.9, .5], [-1.5, 6.7, -.1], [1.5, 6.8, .2]]; cs.forEach(([dx, dy, dz], i) => { wood.sphere(x + dx, dy, zz + dz, .66, .8, .66, BALC[i % 6], 7); tube(wood, [[x + dx, dy - .8, zz + dz], [x, 5.3, zz]], .012, 3, [.9, .9, .9]); wood.cyl(x + dx, zz + dz, dy - .88, dy - .78, .08, .12, 5, BALC[i % 6]); });
     const bx = x + 3.9, by = 6.5; [[1.35, [1, .3, .35]], [1.0, [1, 1, 1]], [.68, [1, .3, .35]], [.38, [1, .85, .3]]].forEach(([r, c], i) => { const f = awn('dart', '#ff4a5a', '#ffffff'); fanZ(wood, bx, by, zz + .1 + i * .03, r, c, 0, TAU, 20); }); wood.cyl(bx, zz + .12, 3.6, by - 1.35, .1, .1, 5, [.5, .35, .2]); };
-  const topStrong = (x, z) => { const zz = z - 1.9; wood.cyl(x - .6, zz, 5.2, 8.2, .22, .2, 8, [.7, .45, .22]); wood.box(x - 2.3, 7.7, zz - .85, x + 1.1, 9.1, zz + .85, [.9, .25, .3]); [-2.3, 1.1].forEach(ex => wood.box(ex - .12, 7.6, zz - .92, ex + .12, 9.2, zz + .92, [1, .85, .3])); wood.box(x - 1.0, 7.7, zz - .9, x - .7, 9.1, zz + .9, [1, .85, .3]); wood.sphere(x - .6, 8.4, zz + .9, .25, .25, .08, [1, .9, .5], 5);
+  const topStrong = (x, z) => { const zz = z - 1.9; wood.cyl(x - .6, zz, 5.2, 8.2, .22, .2, 8, [.7, .45, .22]); wood.box(x - 2.3, 7.7, zz - .85, x + 1.1, 9.1, zz + .85, [.9, .25, .3]); [x - 2.3, x + 1.1].forEach(ex => wood.box(ex - .12, 7.6, zz - .92, ex + .12, 9.2, zz + .92, [1, .85, .3])); wood.box(x - 1.0, 7.68, zz - .9, x - .7, 9.12, zz + .9, [1, .85, .3]); wood.sphere(x - .6, 8.4, zz + .9, .25, .25, .08, [1, .9, .5], 5);
     for (let i = 0; i < 5; i++) { wood.sphere(x + 2.2 + i * .0, 5.6 + i * .8, zz, .32, .32, .32, i < 3 ? [.4, 1, .5] : i < 4 ? [1, .85, .3] : [1, .3, .3], 6); } };
-  const topCamera = (x, z) => { const zz = z - .3; wood.box(x - 1.6, 5.2, zz - .6, x + 1.6, 7.0, zz + .6, [.25, .25, .35]); wood.box(x - 1.6, 6.2, zz - .62, x + 1.6, 7.0, zz + .62, [.9, .9, .95]); wood.box(x - 1.0, 7.0, zz - .4, x - .2, 7.45, zz + .4, [.9, .9, .95]); wood.sphere(x + 1.0, 7.25, zz + .45, .2, .2, .1, [1, .95, .6], 5); glowL.sphere(x + 1.0, 7.25, zz + .5, .18, .18, .08, [1, .95, .7], 5);
-    ring3(wood, x, 6.15, zz + .62, .92, .16, [.7, .7, .78], 'z', 24); const lz = texm('lens', X.camLens, X.camLens, .3, .9); lz.mb.quad([x - .82, 5.33, zz + .66], [x + .82, 5.33, zz + .66], [x + .82, 6.97, zz + .66], [x - .82, 6.97, zz + .66], [0, 0, 1], [0, 0, 1, 1], [1, 1, 1]); [-1, 1].forEach(s => wood.sphere(x + s * 1.2, 5.55, zz + .62, .1, .1, .05, [1, .3, .4], 4)); };
+  const topCamera = (x, z) => { const zz = z - .3; wood.box(x - 1.6, 5.2, zz - .6, x + 1.6, 6.2, zz + .6, [.25, .25, .35]); wood.box(x - 1.72, 6.2, zz - .72, x + 1.72, 7.0, zz + .72, [.9, .9, .95]); wood.box(x - 1.0, 7.0, zz - .4, x - .2, 7.45, zz + .4, [.9, .9, .95]); wood.sphere(x + 1.0, 7.3, zz + .5, .2, .2, .1, [1, .95, .6], 5);
+    ring3(wood, x, 6.15, zz + .95, .92, .14, [.7, .7, .78], 'z', 24); wood.cyl(x, zz + .72, 5.25, 5.25, 0, 0, 3, [1, 1, 1]); const lz = texm('lens', X.camLens, X.camLens, .3, .9); lz.mb.quad([x - .76, 5.4, zz + 1.0], [x + .76, 5.4, zz + 1.0], [x + .76, 6.9, zz + 1.0], [x - .76, 6.9, zz + 1.0], [0, 0, 1], [0, 0, 1, 1], [1, 1, 1]); [-1, 1].forEach(s => wood.sphere(x + s * 1.25, 5.6, zz + .7, .1, .1, .06, [1, .3, .4], 4)); };
   const topCandy = (x, z) => { const zz = z - .9, wf = texm('waffle', X.waffle); wf.mb.cyl(x, zz, 5.1, 7.0, .08, .95, 12, [1, 1, 1]); [[0, 7.6, 0, 1.25, 1.1], [-.9, 7.3, .2, .9, .8], [.9, 7.4, -.1, .95, .85], [.1, 8.5, 0, .85, .8], [-.4, 8.0, .6, .7, .6]].forEach(([dx, dy, dz, rx, ry], i) => wood.sphere(x + dx, dy, zz + dz, rx, ry, rx, i % 2 ? [1, .72, .86] : [.82, .85, 1], 7)); for (let i = 0; i < 14; i++) { const a = i * 2.4; wood.sphere(x + Math.cos(a) * 1.3, 7.3 + (i % 5) * .3, zz + Math.sin(a) * .9 + .5, .07, .07, .07, PAL[i % 6], 3); } };
   const topPopcorn = (x, z) => { const zz = z - .9, bk = awn('pcB', '#e8352e', '#ffffff'); bk.mb.cyl(x, zz, 5.1, 7.2, .95, 1.45, 14, [1, 1, 1]); wood.cyl(x, zz, 7.15, 7.25, 1.5, 1.5, 14, [.98, .98, .95]); const r = rnd(31); for (let i = 0; i < 46; i++) { const a = r() * TAU, rr = Math.sqrt(r()) * 1.3; wood.sphere(x + Math.cos(a) * rr, 7.4 + (1 - rr / 1.3) * .9 + r() * .3, zz + Math.sin(a) * rr, .27, .24, .27, [1, .96 - r() * .1, .8 - r() * .2], 4); } };
   const gold0 = [.98, .8, .3];
@@ -346,15 +355,15 @@ function makeFunfair(R, T) {
     HS.push({ id: 'balloon', x: p.x, z: p.z, r: 2.0, label: '射气球', color: [.4, .85, 1], icon: 4, btn: '射飞镖', iy: 6.0, bx: -26, bz: MIDZ });
     // 3 大力锤（带高塔）
     p = booth(-14, MIDZ, 7.2, { text: '大力锤 STRONGMAN', fs: 88, col: [.95, .75, .3], awn: ['sm', '#ffb21a', '#ffffff'], pi: 2, bg: '#3a2606', bd: '#ffd93d' });
-    { const tx = -14 + 5.4, tz = MIDZ - 1.2; wood.box(tx - .9, 0, tz - .9, tx + .9, .5, tz + .9, [.45, .3, .5]); for (let q = 0; q < 15; q++) wood.box(tx - .28, .5 + q * .55, tz - .28, tx + .28, Math.min(8.2, .5 + (q + 1) * .55), tz + .28, q % 2 ? [1, .55, .65] : [.98, .95, .88]); wood.box(tx - .45, 8.2, tz - .45, tx + .45, 8.5, tz + .45, [.95, .3, .4]); wood.sphere(tx, 8.9, tz, .45, .4, .45, [1, .82, .2], 6); obs(tx - 1, tz - 1, tx + 1, tz + 1);
-      wood.box(tx - .6, .5, tz + .26, tx + .6, 8.2, tz + .34, [.16, .14, .26]); for (let i = 0; i < 15; i++) { wood.box(tx - .58, .88 + i * .5, tz + .34, tx - .38, .92 + i * .5, tz + .37, [.95, .95, 1]); wood.box(tx + .38, .88 + i * .5, tz + .34, tx + .58, .92 + i * .5, tz + .37, [.95, .95, 1]); } S.strong = { x: tx, z: tz }; }
+    { const tx = -14 + 5.4, tz = MIDZ - 1.2; wood.box(tx - .9, 0, tz - .9, tx + .9, .5, tz + .9, [.45, .3, .5]); for (let q = 0; q < 14; q++) wood.box(tx - .28, .5 + q * .55, tz - .28, tx + .28, Math.min(8.2, .5 + (q + 1) * .55), tz + .28, q % 2 ? [1, .55, .65] : [.98, .95, .88]); wood.box(tx - .45, 8.2, tz - .45, tx + .45, 8.5, tz + .45, [.95, .3, .4]); wood.sphere(tx, 8.9, tz, .45, .4, .45, [1, .82, .2], 6); obs(tx - 1, tz - 1, tx + 1, tz + 1);
+      wood.box(tx - .6, .5, tz + .26, tx + .6, 8.18, tz + .34, [.16, .14, .26]); for (let i = 0; i < 15; i++) { wood.box(tx - .58, .88 + i * .5, tz + .34, tx - .38, .92 + i * .5, tz + .37, [.95, .95, 1]); wood.box(tx + .38, .88 + i * .5, tz + .34, tx + .58, .92 + i * .5, tz + .37, [.95, .95, 1]); } S.strong = { x: tx, z: tz }; }
     topStrong(-14, MIDZ);
-    HS.push({ id: 'strong', x: -14 + 2.2, z: MIDZ + 3.7, r: 2.0, label: '大力锤', color: [1, .85, .3], icon: 5, btn: '挥锤', iy: 6.0, bx: -14, bz: MIDZ });
+    HS.push({ id: 'strong', x: -14, z: MIDZ + 3.7, r: 2.0, label: '大力锤', color: [1, .85, .3], icon: 5, btn: '挥锤', iy: 6.0, bx: -14, bz: MIDZ });
     // 5 大头贴
     { newGroup(); const x = 22, z = MIDZ; wood.box(x - 1.5, 0, z - 2.4, x + 1.5, 3.6, z + .4, [.3, .3, .5]); wood.box(x - 1.2, 0, z + .38, x + 1.2, 2.5, z + .44, [.8, .1, .3]); wood.box(x - 1.6, 3.6, z - 2.5, x + 1.6, 3.9, z + .5, [.98, .5, .6]); obs(x - 1.7, z - 2.5, x + 1.7, z + .5);
       const sg = T.sign('大头贴 PHOTO', { w: 512, h: 130, fs: 62, bg: '#2a1b4a', fg: '#fff0fa', border: '#b48cff' }), sb = new MB(); sb.box(x - 1.5, 4.0, z + .1, x + 1.5, 4.9, z + .16, [1, 1, 1], [3, .9], { noBack: true, noSides: true, noTop: true }); signs.push({ mb: sb, tex: sg.tex, em: sg.em });
       topCamera(x, z);
-      HS.push({ id: 'photo', x, z: z + 3.4, r: 2.0, label: '大头贴', color: [.7, .5, 1], icon: 7, btn: '拍大头贴', iy: 6.4 }); }
+      HS.push({ id: 'photo', x, z: z + 3.4, r: 2.0, label: '大头贴', color: [.7, .5, 1], icon: 7, btn: '拍大头贴', iy: 9.2 }); }
     // 6 棉花糖
     p = booth(34, MIDZ, 6.4, { text: '棉花糖 CANDY', col: [.98, .7, .85], awn: ['cc', '#ff7ab6', '#ffffff'], pi: 0, bg: '#3a1030', bd: '#ff9ad5' });
     for (let i = 0; i < 5; i++) { wood.cyl(34 - 2.0 + i * 1.0, MIDZ - .9, 1.16, 1.9, .03, .03, 4, [.9, .9, .9]); wood.sphere(34 - 2.0 + i * 1.0, 2.1, MIDZ - .9, .42, .4, .42, [[1, .7, .85], [.7, .85, 1], [.85, .75, 1], [1, .85, .6], [.7, 1, .85]][i], 6); }
@@ -379,7 +388,7 @@ function makeFunfair(R, T) {
   { const n0 = occ0(), x0 = HAUNT.x, z0 = HAUNT.z, w = 15, mb = new MB(), rf = new MB(), rd = new MB(), st2 = new MB(), iron = new MB(), bone = new MB(), pk = new MB(), pkE = new MB(), face = new MB(), tal = new MB(), cof = new MB(), web = new MB(), lan = new MB(), lanE = new MB(), eyeE = new MB(), gold = new MB(), r = rnd(66), stone = [.5, .47, .58];
     /* 主体 + 立面 */
     mb.box(x0 - w / 2, 0, z0 - 10, x0 + w / 2, 8, z0, [1, 1, 1], [15, 8], { noTop: true, noFront: true });
-    const fm = new MB(); fm.box(x0 - w / 2, 0, z0 - 10, x0 + w / 2, 8, z0, [1, 1, 1], [15, 8], { noTop: true, noBack: true, noSides: true }); add(fm, { tex: X.hauntF, em: X.hauntFE, emDay: .3, emNight: 1.9 }); add(mb, { tex: X.haunt.tex });
+    const fm = new MB(); fm.box(x0 - w / 2, 0, z0 - 10, x0 + w / 2, 8, z0, [1, 1, 1], [15, 8], { noTop: true, noBack: true, noSides: true }); add(fm, { tex: X.hauntF, em: X.hauntFE, emDay: .3, emNight: 1.4 }); add(mb, { tex: X.haunt.tex });
     /* 屋顶：陡坡山墙 + 红黑檐 + 烟囱 */
     const RC = [.16, .12, .24]; const eave = (zz, yy, sg2) => { rf.quad([x0 - w / 2 - .9, 8, zz], [x0 + w / 2 + .9, 8, zz], [x0 + w / 2 + .9, 12.6, z0 - 5.1], [x0 - w / 2 - .9, 12.6, z0 - 5.1], sg2 === 1 ? [0, .75, .65] : [0, .75, -.65], [0, 0, 6, 3], RC); };
     rf.quad([x0 - w / 2 - .9, 8, z0 + .9], [x0 + w / 2 + .9, 8, z0 + .9], [x0 + w / 2 + .9, 12.6, z0 - 5.1], [x0 - w / 2 - .9, 12.6, z0 - 5.1], [0, .75, .65], [0, 0, 6, 3], RC); rf.quad([x0 + w / 2 + .9, 8, z0 - 11.1], [x0 - w / 2 - .9, 8, z0 - 11.1], [x0 - w / 2 - .9, 12.6, z0 - 5.1], [x0 + w / 2 + .9, 12.6, z0 - 5.1], [0, .75, -.65], [0, 0, 6, 3], RC);
@@ -417,7 +426,7 @@ function makeFunfair(R, T) {
     for (let k = 0; k < 7; k++) { const u = (k + .5) / 7, lx = x0 - 8 + u * 16, ly = 5.3 - Math.sin(u * PI) * .7 + .9; if (Math.abs(lx - x0) < 4.2) continue; lan.sphere(lx, ly, z0 + 2.2, .3, .38, .3, [.95, .15, .15], 7); lanE.sphere(lx, ly, z0 + 2.2, .26, .34, .26, [1, .4, .2], 7); tube(iron, [[lx, ly + .38, z0 + 2.2], [lx, ly + .7, z0 + 2.2]], .015, 3, [.5, .4, .2]); }
     add(rf, {}); add(rd, {}); add(st2, { tex: X.haunt.tex }); add(iron, {}); add(bone, {}); add(gold, {}); add(pk, {}); add(lan, {}); add(face, {});
     add(pkE, emS('#ff8a1e', .5, 2.2)); add(lanE, emS('#ff5a30', .6, 2.3)); add(eyeE, emS('#ff2a1a', .9, 2.4)); add(tal, { tex: X.talisman }); add(cof, { tex: X.coffin }); add(web, { tex: X.web, mode: 2, glow: e => .35 + night(e) * .3 });
-    add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.9 });
+    add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.4 });
     obs(x0 - w / 2 - .1, z0 - 10, x0 + w / 2 + .1, z0 + .2); occ1(n0);
     /* 光：绿雾 / 月亮 / 门口红光 */
     const gl = new MB(); bb(gl, x0, 2.4, z0 + 2.5, 6, 6, [.45, 1, .5]); pool(gl, x0, z0 + 4, 7, [.35, 1, .45]); bb(gl, x0 - 7, 3, z0 + 3, 5, 5, [.5, .9, .6]); bb(gl, x0 + 7, 3, z0 + 3, 5, 5, [.5, .9, .6]); bb(gl, x0, 2.2, z0 + 1, 3.4, 3.4, [1, .25, .15]);
@@ -439,7 +448,7 @@ function makeFunfair(R, T) {
     /* 玫瑰花丛（站台两侧）*/
     const rs = new MB(), rf = new MB(), rr = rnd(77); [[-1, 1], [1, 1], [-1, 2], [1, 2], [-1, 3], [1, 3]].forEach(([sd, k]) => { const bx = HX + sd * (4.6 + k * .9), bz = HZ + .6 - (k % 2) * .5; rs.sphere(bx, .6, bz, .75, .55, .75, [.28, .55, .3], 6); for (let q = 0; q < 6; q++) { const a = rr() * TAU, r2 = rr() * .55; rf.sphere(bx + Math.cos(a) * r2, .78 + rr() * .28, bz + Math.sin(a) * r2, .15, .13, .15, rr() < .5 ? [1, .35, .5] : [1, .72, .8], 4); } obsC(bx, bz, .8); });
     add(mb, {}); add(gd, {}); add(lt, emS('#ffe9c0', .5, 2.4)); add(rs, {}); add(rf, {}); occ1(n0);
-    const sg = T.sign('摩天轮 FERRIS WHEEL', { w: 768, h: 140, fs: 70, bg: '#3a0f28', fg: '#fff0f6', border: '#ffb0cf' }), sb = new MB(); sb.box(W.x - 3.5, .5, W.z + 3.85, W.x + 3.5, 2.0, W.z + 3.92, [1, 1, 1], [7, 1.5], { noBack: true, noSides: true, noTop: true }); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.8 });
+    const sg = T.sign('摩天轮 FERRIS WHEEL', { w: 768, h: 140, fs: 70, bg: '#3a0f28', fg: '#fff0f6', border: '#ffb0cf' }), sb = new MB(); sb.box(W.x - 3.5, .5, W.z + 3.85, W.x + 3.5, 2.0, W.z + 3.92, [1, 1, 1], [7, 1.5], { noBack: true, noSides: true, noTop: true }); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.3 });
     HS.push({ id: 'ferris', x: W.x, z: W.z + 6.4, r: 2.0, label: '摩天轮', color: [1, .5, .75], icon: 0, btn: '乘摩天轮', iy: 5.2 }); }
 
   /* ---------- 旋转木马（豪华版：静态）---------- */
@@ -486,12 +495,13 @@ function makeFunfair(R, T) {
   const CABIN = [cabinMesh([1, .8, .88]), cabinMesh([.99, .96, .98]), cabinMesh([.88, .8, 1]), cabinMesh([1, .88, .78])];
 
   /* ---------- 恐龙过山车：3D 轨道（升降坡 / 大俯冲 / 垂直环 / 穿过霸王龙嘴 / 倾斜弯） ---------- */
-  const DINO = { x: 45.5, zm: 4.6, zr: -16.5 };      // 霸王龙：嘴在 +z 方向（朝镜头），轨道从尾部进、嘴里出
+  const DZ = -7;                                          // 整个过山车区域整体往后（-z）移，让入口落在铺砖广场上
+  const DINO = { x: 45.5, zm: 4.6 + DZ, zr: -16.5 + DZ };      // 霸王龙：嘴在 +z 方向（朝镜头），轨道从尾部进、嘴里出
   const CO = (() => {
-    const ctrl = [], P = (x, y, z) => ctrl.push([x, y, z]), ix = {};
+    const ctrl = [], P = (x, y, z) => ctrl.push([x, y, z + DZ]), ix = {};
     P(34, 1.6, 9.2); P(27, 1.6, 9.2); P(21, 1.6, 9.0); ix.lift0 = ctrl.length; P(16.5, 2.0, 6.8); P(14.8, 4.6, 1.5); P(14.5, 8.5, -5); P(15, 13, -11); P(16, 17.2, -17); ix.peak = ctrl.length; P(19.5, 20.2, -21.8); P(26, 19.4, -23.6); P(30.5, 14.5, -23.8); P(33, 7.8, -23.5); P(34.6, 3.6, -23.3);
-    ix.loop0 = ctrl.length; const LP = { x0: 36.2, y0: 1.9, z0: -23.2, R: 4.5, k: .9, dz: 2.6 };
-    for (let i = 0; i <= 12; i++) { const th = i / 12 * TAU; P(LP.x0 + LP.R * Math.sin(th) + LP.k * th, LP.y0 + LP.R * (1 - Math.cos(th)), LP.z0 + LP.dz * th / TAU); } ix.loop1 = ctrl.length - 1;
+    ix.loop0 = ctrl.length; const LP = { x0: 36.2, y0: 1.9, z0: -23.2 + DZ, R: 4.5, k: .9, dz: 2.6 };
+    for (let i = 0; i <= 12; i++) { const th = i / 12 * TAU; ctrl.push([LP.x0 + LP.R * Math.sin(th) + LP.k * th, LP.y0 + LP.R * (1 - Math.cos(th)), LP.z0 + LP.dz * th / TAU]); } ix.loop1 = ctrl.length - 1;
     P(43.7, 2.3, -20.2); P(45.3, 3.0, -18.0); ix.tun0 = ctrl.length; P(45.5, 3.5, -15); P(45.5, 3.5, -9); P(45.5, 3.5, -2); P(45.5, 3.4, 3.0); ix.tun1 = ctrl.length; P(45.4, 3.0, 5.4); P(45.1, 2.4, 7.0); P(42.8, 1.9, 8.7); P(38.5, 1.6, 9.2);
     const dense = cromLoop3(ctrl, 14), nd = dense.length; const cum = [0]; for (let i = 1; i <= nd; i++) { const a = dense[i - 1], b = dense[i % nd]; cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])); }
     const total0 = cum[nd], N = Math.round(total0 / .8); let pts = []; { let j = 0; for (let i = 0; i < N; i++) { const s = i / N * total0; while (cum[j + 1] < s) j++; const u = (s - cum[j]) / (cum[j + 1] - cum[j] || 1), a = dense[j], b = dense[(j + 1) % nd]; pts.push([lerp(a[0], b[0], u), lerp(a[1], b[1], u), lerp(a[2], b[2], u)]); } }
@@ -525,7 +535,7 @@ function makeFunfair(R, T) {
     for (let i = 0; i < N; i += 11) { const p = P[i], u = Un[i]; em.sphere(p[0] + u[0] * .24, p[1] + u[1] * .24, p[2] + u[2] * .24, .1, .1, .1, [1, .7, .5], 4); }
     add(mb, {}); add(ties, {}); add(chain, {}); add(em, emS('#ffb080', .35, 2));
     /* 支柱（隧道 / 垂直环处不放；高的加斜撑） */
-    const noSup = (x, z) => (x > DINO.x - 6 && x < DINO.x + 6 && z > DINO.zr - 3 && z < DINO.zm + 2) || (x > 30 && x < 45 && z > -27 && z < -18.5) || (x > 34 && z > 7 && x < 50 && z < 10);
+    const noSup = (x, z) => (x > DINO.x - 6 && x < DINO.x + 6 && z > DINO.zr - 3 && z < DINO.zm + 2) || (x > 30 && x < 45 && z > -27 + DZ && z < -18.5 + DZ) || (x > 34 && z > 7 + DZ && x < 50 && z < 10 + DZ);
     let prevSup = null; for (let i = 0; i < N; i += 8) { const p = P[i], u = Un[i]; if (p[1] < 2.0 || u[1] < .3 || noSup(p[0], p[2])) { prevSup = null; continue; }
       const h = p[1] - .6, w = .15 + h * .008; const sm = new MB(); sm.box(p[0] - w, 0, p[2] - w, p[0] + w, h, p[2] + w, [.93, .93, .98]); if (h > 7) { sm.box(p[0] - w - .06, 0, p[2] - w - .06, p[0] + w + .06, .35, p[2] + w + .06, [.55, .35, .3]); }
       if (prevSup && prevSup[1] > 4 && h > 4) tube(sm, [[prevSup[0], .4, prevSup[2]], [p[0], h * .9, p[2]]], .045, 3, [.8, .8, .88]);
@@ -544,9 +554,9 @@ function makeFunfair(R, T) {
     for (let i = 0; i < 6; i++) { const a = (i + .5) / 6 * PI; bone.cyl(AX + Math.cos(a) * 3.6, AZ + 1.5, 0, 0, .0, 0, 3, [1, 1, 1]); }
     [-3.6, 3.6].forEach(x => bone.sphere(AX + x, .25, AZ, .5, .5, .5, [.92, .87, .72], 6));
     const sg = T.sign('恐龙过山车 JURASSIC', { w: 1024, h: 190, fs: 84, bg: '#1a0a06', fg: '#ffd98a', border: '#ff6a1a' }), sb = new MB(); sb.box(AX - 3.4, 4.6, AZ + 1.2, AX + 3.4, 6.2, AZ + 1.28, [1, 1, 1], [6.8, 1.6], { noBack: true, noSides: true, noTop: true });
-    add(mb, {}); add(bone, { tex: X.bone }); add(roof, {}); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.9 });
-    obs(18, 7.6, 37, 10.8); occ1(n0);
-    HS.push({ id: 'coaster', x: AX, z: AZ + 2.6, r: 2.0, label: '恐龙过山车', color: [1, .5, .3], icon: 2, btn: '坐过山车', iy: 6.9 }); }
+    [mb, bone, roof, sb].forEach(m => shiftZ(m, DZ)); add(mb, {}); add(bone, { tex: X.bone }); add(roof, {}); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.5 });
+    obs(18, 7.6 + DZ, 37, 10.8 + DZ); occ1(n0);
+    HS.push({ id: 'coaster', x: AX, z: AZ + 2.6 + DZ, r: 2.0, label: '恐龙过山车', color: [1, .5, .3], icon: 2, btn: '坐过山车', iy: 6.9 }); }
 
   const X0 = X;
   /* ---------- 恐龙主题：霸王龙（轨道穿过它的嘴）+ 其它恐龙 + 火山 + 棕榈 ---------- */
@@ -578,23 +588,23 @@ function makeFunfair(R, T) {
       [-1, 1].forEach(s => { sk.sphere(X + s * 5.0, 3.4, -11.5, 2.2, 3.0, 3.6, mul(skinC, .95), 8); sk.box(X + s * 5.0 - 1.2, 0, -10.8, X + s * 5.0 + 1.2, .5, -7.6, [.35, .5, .25]); for (let k = -1; k <= 1; k++) tb.cyl(X + s * 5.0 + k * .8, -7.8, .0, .5, .22, 0, 4, tooth); });
       const tl = crom3([[X + 2.5, 2.8, -15.5], [X + 6, 2.2, -18], [X + 10, 1.4, -20.5], [X + 14, .6, -21]], 6); tube(sk, tl, tl.map((_, i) => 2.2 - i / tl.length * 2), 8, skinC);
       [-1, 1].forEach(s => tube(sk, [[X + s * 2.9, 4.4, 1.5 + 0], [X + s * 3.0, 3.3, 3.2]], [.35, .2], 5, skinC)); }
-    add(sk, { tex: X0.dino }); add(tb, { tex: X0.bone }); add(mt, {}); add(em, emS('#ffd020', .8, 2.4)); add(dk, {});
-    obs(X - 6.6, -18, X + 6.6, 4.8); occ1(n0); S.dinoEye = [[X - 2.85, 8.2, 1.7], [X + 2.85, 8.2, 1.7]];
+    [sk, tb, mt, em, dk].forEach(m => shiftZ(m, DZ)); add(sk, { tex: X0.dino }); add(tb, { tex: X0.bone }); add(mt, {}); add(em, emS('#ffd020', .8, 2.2)); add(dk, {});
+    obs(X - 6.6, -18 + DZ, X + 6.6, 4.8 + DZ); occ1(n0);
     /* --- 其它恐龙 --- */
-    const skin2 = new MB(), sv = sauroMesh(), tr = triceMesh(); xfAppend(skin2, sv, 27, 0, -9, .9, 0, 0, 1); obsC(27, -9, 3.2); obs(24, -12, 30, -5); xfAppend(skin2, tr, 36, 0, -7, -.8, 0, 0, 1.15); obsC(36, -7, 2.4); xfAppend(skin2, tr, 22, 0, 3, 2.4, 0, 0, .8); obsC(22, 3, 1.6);
+    const skin2 = new MB(), sv = sauroMesh(), tr = triceMesh(); xfAppend(skin2, sv, 27, 0, -9 + DZ, .9, 0, 0, 1); obsC(27, -9 + DZ, 3.2); obs(24, -12 + DZ, 30, -5 + DZ); xfAppend(skin2, tr, 36, 0, -7 + DZ, -.8, 0, 0, 1.15); obsC(36, -7 + DZ, 2.4); xfAppend(skin2, tr, 22, 0, 3 + DZ, 2.4, 0, 0, .8); obsC(22, 3 + DZ, 1.6);
     occ(() => add(skin2, {})); }
-  { const n0 = occ0(), mb = new MB(), fr = new MB(); [[20, -2.5, 6, 1.4], [24.5, 6, 5, .8], [40.5, -4, 6.5, 1.8], [40, 5, 5.2, -1], [33, -15, 6, 1], [30, 5, 5, 1.2], [10.5, 7, 5.6, .6], [21, -17, 5, 1.6], [50, 10, 5, 1.3]].forEach(([x, z, h, l], i) => { palm(mb, fr, x, z, h, l, 70 + i); obsC(x, z, .45); });
+  { const n0 = occ0(), mb = new MB(), fr = new MB(); [[20, -2.5, 6, 1.4], [24.5, 6, 5, .8], [38.2, -4, 6.5, 1.8], [40, 5, 5.2, -1], [33, -15, 6, 1], [30, 5, 5, 1.2], [10.5, 7, 5.6, .6], [21, -17, 5, 1.6], [50, 10, 5, 1.3]].forEach(([x, z, h, l], i) => { palm(mb, fr, x, z + DZ, h, l, 70 + i); obsC(x, z + DZ, .45); });
     add(mb, {}); add(fr, {}); occ1(n0);
     /* 恐龙蛋窝 */
-    const nest = new MB(), eg = new MB(), r = rnd(9); const nx = 25.5, nz = 1.5; { const ring = []; for (let i = 0; i <= 20; i++) { const a = i / 20 * TAU; ring.push([nx + Math.cos(a) * 1.5, .25, nz + Math.sin(a) * 1.5]); } tube(nest, ring, .3, 6, [.5, .36, .22]); }
+    const nest = new MB(), eg = new MB(), r = rnd(9); const nx = 25.5, nz = 1.5 + DZ; { const ring = []; for (let i = 0; i <= 20; i++) { const a = i / 20 * TAU; ring.push([nx + Math.cos(a) * 1.5, .25, nz + Math.sin(a) * 1.5]); } tube(nest, ring, .3, 6, [.5, .36, .22]); }
     for (let i = 0; i < 5; i++) { const a = i / 5 * TAU, e = [[.95, .92, .78], [.8, .93, .85], [.95, .82, .8], [.85, .85, .95], [.97, .9, .6]][i]; eg.sphere(nx + Math.cos(a) * .6, .55, nz + Math.sin(a) * .6, .36, .48, .36, e, 6); } eg.sphere(nx, .65, nz, .42, .55, .42, [.7, .95, .6], 6); obsC(nx, nz, 1.7);
     add(nest, {}); add(eg, {});
     /* 火山 */
-    const vx = 57, vz = -8, vo = new MB(); lathe(vo, vx, vz, [[7, 0], [6.4, 1.2], [5.2, 3.2], [3.8, 6], [2.5, 8.6], [1.9, 9.8], [1.5, 10.2], [1.2, 9.5], [.8, 8.8]], 14, [1, 1, 1], 3); add(vo, { tex: X0.rock, em: X0.rockE, emDay: .5, emNight: 2.2 });
+    const vx = 57, vz = -8 + DZ, vo = new MB(); lathe(vo, vx, vz, [[7, 0], [6.4, 1.2], [5.2, 3.2], [3.8, 6], [2.5, 8.6], [1.9, 9.8], [1.5, 10.2], [1.2, 9.5], [.8, 8.8]], 14, [1, 1, 1], 3); add(vo, { tex: X0.rock, em: X0.rockE, emDay: .5, emNight: 2.2 });
     const lv = new MB(); lv.disc(vx, vz, 9.0, 1.35, 12, [1, .55, .1]); add(lv, emS('#ff8a1a', 1.0, 2.6)); obsC(vx, vz, 5.5); S.volcano = [vx, 10.4, vz];
     const vg = new MB(); bb(vg, vx, 10.2, vz, 7, 7, [1, .5, .15]); add(vg, { tex: T.glow, mode: 2, glow: e => .25 + night(e) * .7 });
     /* 化石：肋骨 / 头骨装饰（路边） */
-    const fo = new MB(); for (let k = 0; k < 6; k++) { const pts = []; for (let i = 0; i <= 10; i++) { const a = i / 10 * PI * .85; pts.push([46.5 + k * .7, Math.sin(a) * 1.4, 12.6 + Math.cos(a) * 1.2 - 1.2]); } tube(fo, pts, .09, 4, [.95, .9, .78]); } add(fo, { tex: X0.bone });
+    const fo = new MB(); for (let k = 0; k < 6; k++) { const pts = []; for (let i = 0; i <= 10; i++) { const a = i / 10 * PI * .85; pts.push([46.5 + k * .7, Math.sin(a) * 1.4, 12.6 + DZ + Math.cos(a) * 1.2 - 1.2]); } tube(fo, pts, .09, 4, [.95, .9, .78]); } add(fo, { tex: X0.bone });
   }
 
   /* ---------- 喷泉许愿 ---------- */
@@ -603,7 +613,7 @@ function makeFunfair(R, T) {
   /* ---------- 入口门 + 回广场 ---------- */
   { const n0 = occ0(), gx = GATE.x, gz = GATE.z, mb = new MB(), em = new MB();
     mb.box(gx - 3.4, 0, gz - .3, gx - 2.9, 3.6, gz + .3, [.95, .35, .5]); mb.box(gx + 2.9, 0, gz - .3, gx + 3.4, 3.6, gz + .3, [.95, .35, .5]); mb.box(gx - 3.7, 3.6, gz - .4, gx + 3.7, 4.0, gz + .4, [.98, .8, .25]); add(mb, {});
-    const sg = T.sign('回到星光广场', { w: 1024, h: 170, fs: 90, bg: '#10243a', fg: '#c8fff0', border: '#52e0b5' }), sb = new MB(); sb.quad([gx - 2.8, 2.0, gz + .32], [gx + 2.8, 2.0, gz + .32], [gx + 2.8, 3.4, gz + .32], [gx - 2.8, 3.4, gz + .32], [0, 0, 1], [0, 0, 1, 1], [1, 1, 1]); sb.quad([gx + 2.8, 2.0, gz - .32], [gx - 2.8, 2.0, gz - .32], [gx - 2.8, 3.4, gz - .32], [gx + 2.8, 3.4, gz - .32], [0, 0, -1], [0, 0, 1, 1], [1, 1, 1]); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.7 });
+    const sg = T.sign('回到星光广场', { w: 1024, h: 170, fs: 90, bg: '#10243a', fg: '#c8fff0', border: '#52e0b5' }), sb = new MB(); sb.quad([gx - 2.8, 2.0, gz + .32], [gx + 2.8, 2.0, gz + .32], [gx + 2.8, 3.4, gz + .32], [gx - 2.8, 3.4, gz + .32], [0, 0, 1], [0, 0, 1, 1], [1, 1, 1]); sb.quad([gx + 2.8, 2.0, gz - .32], [gx - 2.8, 2.0, gz - .32], [gx - 2.8, 3.4, gz - .32], [gx + 2.8, 3.4, gz - .32], [0, 0, -1], [0, 0, 1, 1], [1, 1, 1]); add(sb, { tex: sg.tex, em: sg.em, emDay: .5, emNight: 1.3 });
     em.box(gx - 2.9, 3.4, gz - .2, gx + 2.9, 3.5, gz + .2, [1, 1, 1]); add(em, emS('#52e0b5', .8, 2.2)); obs(gx - 3.5, gz - .4, gx - 2.8, gz + .4); obs(gx + 2.8, gz - .4, gx + 3.5, gz + .4);
     S.portals.push({ id: 'plaza', x: gx, z: gz - .9, r: 2.0, label: '回到星光广场', color: [.4, 1, .7], spawn: [0, 12.5], icon: 12, iy: 4.8 }); S.exitPortal = S.portals[0];
     occ1(n0); }
@@ -654,7 +664,7 @@ function makeFunfair(R, T) {
 
   /* ---------- 植被：两侧与北面种树，南面只放矮灌木（避免挡住玩家） ---------- */
   { const tm = new MB(), lm = new MB(), hm = new MB(), fl = new MB(), r = rnd(9);
-    const bound = (a) => { let lo = .6, hi = 1.5; for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2, x = CX + m * RX * Math.cos(a), z = CZ + m * RZ * Math.sin(a); if (rfun(x, z) < 1) lo = m; else hi = m; } return [CX + hi * RX * Math.cos(a), CZ + hi * RZ * Math.sin(a), a]; };
+    const bound = (a) => { let lo = .6, hi = 1.5; for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2, x = CX + m * RX * Math.cos(a), z = CZ + m * (Math.sin(a) < 0 ? RZN : RZ) * Math.sin(a); if (rfun(x, z) < 1) lo = m; else hi = m; } return [CX + hi * RX * Math.cos(a), CZ + hi * (Math.sin(a) < 0 ? RZN : RZ) * Math.sin(a), a]; };
     for (let a = 0; a < TAU; a += .03) {
       const [bx, bz] = bound(a), out = [Math.cos(a) * 1.4, Math.sin(a) * 1.0], south = bz > 12;
       if (south) { if (r() < .55) { const x = bx - out[0] * (.6 + r() * 1.6), z = bz - out[1] * (.6 + r() * 1.6), s = .55 + r() * .4; if (inside(x, z)) { blob(hm, x, .35, z, s * 1.2, s * .6, s * 1.2, mix([.2, .5, .22], [.34, .66, .3], r()), 5, a * 50, .2); if (r() < .7) for (let q = 0; q < 3; q++) fl.sphere(x + (r() - .5) * s * 1.6, .7 + r() * .2, z + (r() - .5) * s, .11, .11, .11, PAL[(r() * 6) | 0], 3); obsC(x, z, s * .9); } } continue; }
@@ -682,7 +692,7 @@ function makeFunfair(R, T) {
     add(mb, {}); }
 
   /* ---------- 障碍：用不规则边界生成 ---------- */
-  { const x0 = -82, x1 = 82, z0 = -52, z1 = 62, cs = 1.0, cols = Math.ceil((x1 - x0) / cs), rows = Math.ceil((z1 - z0) / cs);
+  { const x0 = -82, x1 = 82, z0 = -80, z1 = 62, cs = 1.0, cols = Math.ceil((x1 - x0) / cs), rows = Math.ceil((z1 - z0) / cs);
     for (let i = 0; i < cols; i++) { let run = null; const xa = x0 + i * cs, xb = xa + cs, xm = xa + cs / 2;
       for (let j = 0; j <= rows; j++) { const za = z0 + j * cs, bad = j < rows && !inside(xm, za + cs / 2); if (bad) { if (!run) run = za; } else if (run != null) { obs(xa, run, xb, za); run = null; } } } }
 
@@ -696,8 +706,8 @@ function makeFunfair(R, T) {
   /* =====================================================================
      动态部分（摩天轮 / 旋转木马 / 过山车 / 摇摆飞椅 / 气球 / 喷泉 / 粒子 / 小游戏 / 乘坐）
      ===================================================================== */
-  const mk = (mat) => add(Object.assign(new MB(), { i: [0, 0, 0] }), mat);
-  const dynOpaque = new MB(), bOpaque = mk({});
+  const mk = (mat) => { const b = add(Object.assign(new MB(), { i: [0, 0, 0] }), mat); if (b) b.bb = null; return b; };
+  const dynOpaque = new MB(), bOpaque = mk({}), dynRide = new MB(), bRide = mk({});
   const dynIcons = new MB(), bIcons = mk({ tex: R.black, em: X.icons, emDay: 1, emNight: 0 });
   const dynSky = new MB(), bSky = mk({ tex: T.glow, mode: 2, glow: 1 });
   const dynCloud = new MB(), bCloud = mk({ tex: X.cloud, mode: 3, glow: .55 });
@@ -1073,6 +1083,7 @@ function makeFunfair(R, T) {
       if ((r.kind === 'coaster' && st.coS - r.s0 > r.total) || r.t > r.dur) endRide();
     }
     computeRig(dt, t);
+    { const cx = st.ride ? [-62, 72] : [-40, 40], cz = st.ride ? [-52, 44] : [-34, 34]; [S.camera, S.cameraWide].forEach(c => { c.clampX = cx; c.clampZ = cz; }); }
     { const vw = (g && g.wide && S.cameraWide) || S.camera; st.baseDist = vw.dist; }
     if (cam) { const want = st.baseDist + (st.ride ? 2.1 * Math.max(0, riderY - 1.5) : 0); cam.dist += (want - cam.dist) * (1 - Math.exp(-(st.ride ? 3 : 2) * dt)); }
 
@@ -1096,7 +1107,7 @@ function makeFunfair(R, T) {
     /* ---- 夜晚自动烟花秀（湖面上空） ---- */
     if (!st.nextShow) st.nextShow = t + 12;
     if (e.night > .55 && t > st.nextShow) { st.nextShow = t + 55; const cols = [[[1, .4, .6], [1, .8, .9]], [[.4, .8, 1], [.8, 1, 1]], [[1, .85, .3], [1, 1, .7]], [[.6, 1, .5], [.9, 1, .8]]];
-      for (let i = 0; i < 9; i++) { const x = 6 + Math.random() * 52, z = -46 - Math.random() * 14, hh = 13 + Math.random() * 4, cc = pick(cols), t0 = t + i * 1.1 + .2;
+      for (let i = 0; i < 9; i++) { const x = 6 + Math.random() * 52, z = -60 - Math.random() * 14, hh = 13 + Math.random() * 4, cc = pick(cols), t0 = t + i * 1.1 + .2;
         later.push([t0, () => { for (let k = 0; k < 12; k++) later.push([performance.now() / 1000 + k * .04, () => addP(x, 2 + (hh - 2) * (k / 12), z, 0, 0, 0, .5, .3, [1, .9, .6], 0, 0)]); }], [t0 + .55, () => { burst(x, hh, z, 90, 9, 1.9, .42, cc, -4); burst(x, hh, z, 24, 4.5, 1.4, .55, [[1, 1, 1]], -3); }]); } }
 
     /* ---- 天空：太阳 / 月亮 / 地平线暖光 / 云 ---- */
@@ -1112,24 +1123,32 @@ function makeFunfair(R, T) {
 
     /* ---- 不透明动态物 ---- */
     const mb = dynOpaque; mb.v.length = 0; mb.i.length = 0; mb.n = 0; const W = WHEEL;
-    // 摩天轮：辐条 + 封闭吊舱
-    for (let i = 0; i < W.n; i++) { const a = st.wheel + i * TAU / W.n, px = W.x + Math.cos(a) * W.R, py = W.hub + Math.sin(a) * W.R;
+    /* 性能：屏幕外的游乐设施这一帧不重新生成几何 */
+    const vis = (x0, y0, z0, x1, y1, z1) => st.ride || !R.view || !R.view.VP || inView([[x0, y0, z0], [x1, y1, z1]], R.view.VP, 3);
+    const visW = vis(W.x - W.R - 3, 0, W.z - 3, W.x + W.R + 3, W.hub + W.R + 3, W.z + 8), visC = vis(CAR.x - 7.5, 0, CAR.z - 7.5, CAR.x + 7.5, 11, CAR.z + 7.5), visS = vis(44, 0, 0, 64, 17, 20), visG = vis(GATE.x - 8, 0, GATE.z - 3, GATE.x + 8, 7, GATE.z + 3);
+    // 摩天轮、旋转木马：慢速转动，30Hz 更新即可（省一半 CPU / 上传）
+    const doRide = st.ride || fr % 2 === 0 || !S._ri;
+    if (doRide) { const mb = dynRide; mb.v.length = 0; mb.i.length = 0; mb.n = 0;
+    if (visW) for (let i = 0; i < W.n; i++) { const a = st.wheel + i * TAU / W.n, px = W.x + Math.cos(a) * W.R, py = W.hub + Math.sin(a) * W.R;
       [-.9, .9].forEach(zo => tube(mb, [[W.x, W.hub, W.z + zo], [px, py, W.z + zo]], .07, 4, [.99, .92, .95]));
       xfAppend(mb, CABIN[i % 4], px, py - 2.95, W.z, 0, 0, 0, 1); [-.6, .6].forEach(dz => tube(mb, [[px, py - .1, W.z + dz * .5], [px + dz * 0, py - .8, W.z + dz * .8], [px, py - 0.95 + 0, W.z + dz * .8]], .025, 3, WGOLD)); tube(mb, [[px, py, W.z - .9], [px, py, W.z + .9]], .05, 4, WGOLD); [-.9, .9].forEach(zz => tube(mb, [[px, py, W.z + zz], [px, py - 1.0, W.z + zz * .5], [px, py - .85, W.z + zz * .5]], .03, 3, [.9, .9, .95])); }
     // 旋转木马（豪华马）
-    for (let i = 0; i < HORSES; i++) { const a = st.car + i * TAU / HORSES, x = CAR.x + Math.cos(a) * 3.9, z = CAR.z + Math.sin(a) * 3.9, y = horseBob(i, t), tx = -Math.sin(a), tz = Math.cos(a);
+    if (visC) for (let i = 0; i < HORSES; i++) { const a = st.car + i * TAU / HORSES, x = CAR.x + Math.cos(a) * 3.9, z = CAR.z + Math.sin(a) * 3.9, y = horseBob(i, t), tx = -Math.sin(a), tz = Math.cos(a);
       tube(mb, [[x, .56, z], [x, 5.35, z]], .05, 5, [.98, .82, .35]); for (let q = 0; q < 7; q++) mb.sphere(x, .9 + q * .62, z, .075, .075, .075, [1, .55, .72], 4); xfAppend(mb, HM[i % 5], x, y - .05, z, Math.atan2(tx, tz), 0, 0, .95); }
-    for (let i = 0; i < 5; i++) { const a = -st.car * .9 + i * TAU / 5, x = CAR.x + Math.cos(a) * 2.35, z = CAR.z + Math.sin(a) * 2.35, bb0 = horseBob(i, t) * .6, tx = -Math.sin(a), tz = Math.cos(a); mb.cyl(x, z, .56, 5.3, .04, .04, 4, WGOLD);
+    if (visC) for (let i = 0; i < 5; i++) { const a = -st.car * .9 + i * TAU / 5, x = CAR.x + Math.cos(a) * 2.35, z = CAR.z + Math.sin(a) * 2.35, bb0 = horseBob(i, t) * .6, tx = -Math.sin(a), tz = Math.cos(a); mb.cyl(x, z, .56, 5.3, .04, .04, 4, WGOLD);
       mb.cyl(x, z, .55 + bb0, .62 + bb0, .62, .62, 10, [.98, .8, .3]); mb.cyl(x, z, .62 + bb0, .86 + bb0, .6, .56, 10, PAL[i % 6]); mb.sphere(x - tx * .1, .98 + bb0, z - tz * .1, .5, .22, .45, [1, 1, 1], 6); mb.sphere(x + tx * .55, 1.45 + bb0, z + tz * .55, .17, .3, .17, [1, 1, 1], 5); mb.sphere(x + tx * .66, 1.76 + bb0, z + tz * .66, .13, .12, .13, [1, 1, 1], 5); mb.sphere(x + tx * .8, 1.74 + bb0, z + tz * .8, .09, .04, .06, [1, .6, .2], 4); }
+    }
     // 过山车列车
     for (let k = 0; k < 4; k++) { const f = CO.frame(st.coS - 3.5 * k); xfBasis(mb, CARM[k], f.p, f.T, f.U); }
     // 摇摆飞椅
-    { const sx0 = 54, sz0 = 10; mb.cyl(sx0, sz0, 0, 13, .5, .3, 8, [.95, .9, .95]); const sp = st.swing, ra = Math.min(1, 1.2 + Math.sin(sp * .3) * .3);
+    if (doRide) { const mb = dynRide;
+    if (visS) { const sx0 = 54, sz0 = 10; mb.cyl(sx0, sz0, 0, 13, .5, .3, 8, [.95, .9, .95]); const sp = st.swing, ra = Math.min(1, 1.2 + Math.sin(sp * .3) * .3);
       mb.cyl(sx0, sz0, 12.8, 13.4, 4.8, 4.8, 20, [1, .5, .65], true); mb.cyl(sx0, sz0, 13.4, 15.2, 4.9, .2, 12, [1, .85, .3]);
       for (let i = 0; i < 12; i++) { const a = sp + i * TAU / 12, swing = .75 + Math.sin(sp * .25) * .15, rx = 4.2 + Math.sin(swing) * 3.4, ry = 12.8 - Math.cos(swing) * 3.4 - 1.6, cx = sx0 + Math.cos(a) * rx, cz = sz0 + Math.sin(a) * rx;
         tube(mb, [[sx0 + Math.cos(a) * 4.2, 12.8, sz0 + Math.sin(a) * 4.2], [cx, ry + 1.2, cz]], .03, 3, [.85, .85, .9]); mb.box(cx - .35, ry, cz - .35, cx + .35, ry + .12, cz + .35, PAL[i % 6]); mb.box(cx - .35, ry + .12, cz - .35, cx + .35, ry + .7, cz - .28, PAL[i % 6]); } }
     // 入口彩色气球（飘浮）
-    for (let i = 0; i < 9; i++) { const sd = i < 5 ? -1 : 1, kq = i < 5 ? i : i - 5, bx = GATE.x + sd * (3.9 + kq * .85), bz = GATE.z - .3 + (kq % 2) * .5, by = 4.2 + Math.sin(t * 1.1 + i) * .3 + (kq % 3) * .45; mb.sphere(bx, by, bz, .5, .62, .5, BALC[i % 6], 6); tube(mb, [[bx, by - .6, bz], [bx + Math.sin(t + i) * .1, .28, bz]], .012, 3, [.9, .9, .9]); mb.box(bx - .14, 0, bz - .14, bx + .14, .28, bz + .14, BALC[i % 6]); }
+    if (visG) for (let i = 0; i < 9; i++) { const sd = i < 5 ? -1 : 1, kq = i < 5 ? i : i - 5, bx = GATE.x + sd * (3.9 + kq * .85), bz = GATE.z - .3 + (kq % 2) * .5, by = 4.2 + Math.sin(t * 1.1 + i) * .3 + (kq % 3) * .45; mb.sphere(bx, by, bz, .5, .62, .5, BALC[i % 6], 6); tube(mb, [[bx, by - .6, bz], [bx + Math.sin(t + i) * .1, .28, bz]], .012, 3, [.9, .9, .9]); mb.box(bx - .14, 0, bz - .14, bx + .14, .28, bz + .14, BALC[i % 6]); }
+    if (doRide) { upload(bRide, dynRide); S._ri = 1; } }
     // 打气球摊的气球
     B_.list.forEach(b => { if (b.alive) { mb.sphere(b.x, b.y + Math.sin(t * 2 + b.ph) * .03, b.z, .3, .36, .3, BALC[b.col], 5); } });
     // 大力锤的小球
@@ -1138,7 +1157,7 @@ function makeFunfair(R, T) {
     if (B_.s === 2) { const d = B_.dart, u = Math.min(1, d.t); const p = [lerp(d.from[0], d.to[0], u), lerp(d.from[1], d.to[1], u), lerp(d.from[2], d.to[2], u)]; tube(mb, [[p[0], p[1], p[2]], [p[0], p[1], p[2] + .5]], [.03, .03], 3, [.95, .9, .3]); mb.sphere(p[0], p[1], p[2] - .04, .06, .06, .06, [1, .3, .3], 3); }
     if (R_.s === 2) { const f = R_.fl, u = Math.min(1, f.t), p = [lerp(f.from[0], f.to[0], u), lerp(f.from[1], f.to[1], u) + Math.sin(u * PI) * 1.8, lerp(f.from[2], f.to[2], u)], pts = []; for (let i = 0; i <= 9; i++) { const a = i / 9 * TAU; pts.push([p[0] + Math.cos(a) * .3, p[1], p[2] + Math.sin(a) * .3]); } tube(mb, pts, .045, 3, [1, .85, .3]); }
     // 翼龙（绕着过山车盘旋）
-    for (let i = 0; i < 3; i++) { const a = t * (.16 + i * .03) + i * 2.1, rx = 30 + i * 4, rz = 20 + i * 3, cx0 = 32, cz0 = -6, x = cx0 + Math.cos(a) * rx, z = cz0 + Math.sin(a) * rz, y = 17 + i * 2.2 + Math.sin(t * .7 + i) * 1.6, dx = -Math.sin(a) * rx, dz = Math.cos(a) * rz, yw = Math.atan2(dx, dz), fl = Math.sin(t * 4.2 + i * 1.7), c = [[.55, .38, .5], [.4, .5, .6], [.6, .45, .3]][i], sc = 1.3;
+    for (let i = 0; i < 3; i++) { const a = t * (.16 + i * .03) + i * 2.1, rx = 30 + i * 4, rz = 20 + i * 3, cx0 = 32, cz0 = -6 + DZ, x = cx0 + Math.cos(a) * rx, z = cz0 + Math.sin(a) * rz, y = 17 + i * 2.2 + Math.sin(t * .7 + i) * 1.6, dx = -Math.sin(a) * rx, dz = Math.cos(a) * rz, yw = Math.atan2(dx, dz), fl = Math.sin(t * 4.2 + i * 1.7), c = [[.55, .38, .5], [.4, .5, .6], [.6, .45, .3]][i], sc = 1.3;
       const fw = [Math.sin(yw), 0, Math.cos(yw)], rt = [Math.cos(yw), 0, -Math.sin(yw)], P = (f, u, r) => [x + fw[0] * f * sc + rt[0] * r * sc, y + u * sc, z + fw[2] * f * sc + rt[2] * r * sc];
       mb.sphere(x, y, z, .35 * sc, .28 * sc, .9 * sc, c, 5); mb.tri(P(1.3, .0, .15), P(1.3, .0, -.15), P(2.4, -.1, 0), [0, 1, 0], [.9, .5, .3]); mb.tri(P(.6, .15, .1), P(.6, .15, -.1), P(-.7, .9, 0), [0, 1, 0], mul(c, 1.2));
       [-1, 1].forEach(s2 => { mb.tri(P(.5, 0, s2 * .2), P(-.6, 0, s2 * .2), P(-1.4, 1.4 * fl * .6 + .1, s2 * 3.4), [0, 1, 0], c); mb.tri(P(.5, 0, s2 * .2), P(-1.4, 1.4 * fl * .6 + .1, s2 * 3.4), P(.9, .9 * fl * .6, s2 * 3.0), [0, 1, 0], mul(c, 1.15)); }); mb.tri(P(-.6, 0, .1), P(-.6, 0, -.1), P(-2.0, -.1, 0), [0, 1, 0], c); }
@@ -1147,17 +1166,17 @@ function makeFunfair(R, T) {
 
     /* ---- 发光层：灯泡链、准星、鬼屋、水晶球、喷泉 ---- */
     const gi = .22 + e.night * .78, gm = dynGlow; gm.v.length = 0; gm.i.length = 0; gm.n = 0; const cyc = Math.floor(t * 6);
-    { const RC = [[1, .55, .72], [1, .86, .92], [1, .9, .62], [1, .66, .82]], hb = (u, sc) => [16 * Math.pow(Math.sin(u), 3) * sc, (13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u)) * sc];
+    if (visW) { const RC = [[1, .55, .72], [1, .86, .92], [1, .9, .62], [1, .66, .82]], hb = (u, sc) => [16 * Math.pow(Math.sin(u), 3) * sc, (13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u)) * sc];
       for (let k = 0; k < 2; k++) { const zo = k ? .9 : -.9; for (let i = 0; i < 64; i++) { const a = i / 64 * TAU, c = RC[(i + (cyc >> 1)) % 4], on = (.45 + .8 * Math.max(0, Math.sin(t * 2.6 - i * .4))) * gi; bb(gm, W.x + Math.cos(a) * W.R, W.hub + Math.sin(a) * W.R, W.z + zo, .5, .5, mul(c, on)); if (i % 2 === 0) bb(gm, W.x + Math.cos(a) * W.R * .72, W.hub + Math.sin(a) * W.R * .72, W.z + zo, .34, .34, mul(RC[(i >> 1) % 4], .55 * gi)); } }
       for (let i = 0; i < W.n; i++) { const a = st.wheel + i * TAU / W.n; for (let j = 1; j <= 6; j++) { const r = j * W.R / 7; bb(gm, W.x + Math.cos(a) * r, W.hub + Math.sin(a) * r, W.z + .95, .36, .36, mul(RC[(i + j) % 4], (.35 + .5 * Math.max(0, Math.sin(t * 3 - j * .8 + i))) * gi)); } bb(gm, W.x + Math.cos(a) * W.R, W.hub + Math.sin(a) * W.R - 1.9, W.z, 1.9, 1.9, mul([1, .85, .6], .55 * gi)); bb(gm, W.x + Math.cos(a) * W.R, W.hub + Math.sin(a) * W.R - 2.95 + .1, W.z, 1.0, 1.0, mul([1, .6, .75], .35 * gi)); }
       for (let q = 0; q < 3; q++) { const a = st.wheel + q * TAU / 3 + .5, cx = W.x + Math.cos(a) * W.R * .45, cy = W.hub + Math.sin(a) * W.R * .45; for (let k = 0; k < 22; k++) { const h = hb(k / 22 * TAU, .085); bb(gm, cx + h[0], cy + h[1] + .2, W.z + 1.0, .3, .3, mul([1, .45, .65], (.7 + .5 * Math.sin(t * 4 + q)) * gi)); } }
       for (let k = 0; k < 40; k++) { const h = hb(k / 40 * TAU, .2); bb(gm, W.x + h[0], 4.6 + h[1], W.z + 4.4 + .1, .36, .36, mul([1, .6, .78], (.6 + .6 * Math.max(0, Math.sin(t * 3 - k * .3))) * gi)); }
       bb(gm, W.x, W.hub, W.z + 1.2, 3.2, 3.2, mul([1, .8, .85], .6 * gi)); bb(gm, W.x, W.hub, W.z + 1.2, 1.4, 1.4, mul([1, 1, 1], .8 * gi)); }
-    for (let i = 0; i < 44; i++) { const a = i / 44 * TAU, c = [[1, .55, .72], [1, 1, 1], [1, .85, .4]][(i + (cyc >> 1)) % 3]; bb(gm, CAR.x + Math.cos(a) * 6.55, 5.0, CAR.z + Math.sin(a) * 6.55, .5, .5, mul(c, (.55 + .6 * Math.max(0, Math.sin(t * 3 - i * .5))) * gi)); if (i % 2 === 0) bb(gm, CAR.x + Math.cos(a) * 6.0, 1.55, CAR.z + Math.sin(a) * 6.0, .3, .3, mul([1, .75, .85], .5 * gi)); }
-    for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; bb(gm, CAR.x + Math.cos(a) * 3.0, 5.05, CAR.z + Math.sin(a) * 3.0, .42, .42, mul([1, .9, .6], (.6 + .4 * Math.sin(t * 2 + i)) * gi)); }
-    bb(gm, CAR.x, 5.1, CAR.z, 6.5, 6.5, mul([1, .75, .85], .28 * gi)); bb(gm, CAR.x, 9.8, CAR.z, 2.4, 2.4, mul([1, .85, .4], .8 * gi));
+    if (visC) for (let i = 0; i < 44; i++) { const a = i / 44 * TAU, c = [[1, .55, .72], [1, 1, 1], [1, .85, .4]][(i + (cyc >> 1)) % 3]; bb(gm, CAR.x + Math.cos(a) * 6.55, 5.0, CAR.z + Math.sin(a) * 6.55, .5, .5, mul(c, (.55 + .6 * Math.max(0, Math.sin(t * 3 - i * .5))) * gi)); if (i % 2 === 0) bb(gm, CAR.x + Math.cos(a) * 6.0, 1.55, CAR.z + Math.sin(a) * 6.0, .3, .3, mul([1, .75, .85], .5 * gi)); }
+    if (visC) for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; bb(gm, CAR.x + Math.cos(a) * 3.0, 5.05, CAR.z + Math.sin(a) * 3.0, .42, .42, mul([1, .9, .6], (.6 + .4 * Math.sin(t * 2 + i)) * gi)); }
+    if (visC) bb(gm, CAR.x, 5.1, CAR.z, 6.5, 6.5, mul([1, .75, .85], .28 * gi)); bb(gm, CAR.x, 9.8, CAR.z, 2.4, 2.4, mul([1, .85, .4], .8 * gi));
     if (Math.random() < .12) addP(WHEEL.x + (Math.random() - .5) * 15, WHEEL.hub + WHEEL.R + 1, WHEEL.z + (Math.random() - .5) * 5, (Math.random() - .5) * .8, -.5, (Math.random() - .5) * .8, 6, .16, [1, .62, .78], -.15, .3);
-    { const cx = 54, cz = 10; for (let i = 0; i < 20; i++) { const a = i / 20 * TAU + st.swing * .2; bb(gm, cx + Math.cos(a) * 4.8, 12.8, cz + Math.sin(a) * 4.8, .45, .45, mul(PAL[(i + cyc) % 6], .9 * gi)); } }
+    if (visS) { const cx = 54, cz = 10; for (let i = 0; i < 20; i++) { const a = i / 20 * TAU + st.swing * .2; bb(gm, cx + Math.cos(a) * 4.8, 12.8, cz + Math.sin(a) * 4.8, .45, .45, mul(PAL[(i + cyc) % 6], .9 * gi)); } }
     // 游戏摊的准星
     if (R_.s === 1) bb(gm, ringH.bx + R_.sweep, 2.05, ringH.bz - 1.2, .8, .8, mul([1, .4, .6], .9 + .3 * Math.sin(t * 12)));
     if (B_.s === 1) { const c = crossPos(); bb(gm, c[0], c[1], c[2], .5, .5, mul([1, .3, .3], 1.1)); bb(gm, c[0], c[1], c[2], 1.1, 1.1, mul([1, .6, .6], .35)); }
@@ -1177,7 +1196,7 @@ function makeFunfair(R, T) {
     /* ---- 喷泉水花 + 粒子 ---- */
     st.fountT += dt; while (st.fountT > .03) { st.fountT -= .03; const a = Math.random() * TAU, s = Math.random() * 1.2; addP(FOUNT.x + Math.cos(a) * .2, 4.0, FOUNT.z + Math.sin(a) * .2, Math.cos(a) * s, 6 + Math.random() * 2, Math.sin(a) * s, 1.1, .12, [.75, .92, 1], -9, 0); if (Math.random() < .35) { const b = Math.random() * TAU; addP(FOUNT.x + Math.cos(b) * 2.6, 2.6, FOUNT.z + Math.sin(b) * 2.6, Math.cos(b) * 1.2, 3.5, Math.sin(b) * 1.2, .9, .1, [.75, .92, 1], -9, 0); } }
     /* ---- 霸王龙喷火 + 火山余烬 + 鼻孔烟 ---- */
-    { st.fireT = (st.fireT || 0) + dt; const f0 = CO.frame(st.coS), atM = Math.abs(f0.p[0] - DINO.x) < 2 && f0.p[2] > 1 && f0.p[2] < 9 && f0.p[1] < 5; if (atM) st.fireB = 1.4; st.fireB = Math.max(0, (st.fireB || 0) - dt);
+    { st.fireT = (st.fireT || 0) + dt; const f0 = CO.frame(st.coS), atM = Math.abs(f0.p[0] - DINO.x) < 2 && f0.p[2] > 1 + DZ && f0.p[2] < 9 + DZ && f0.p[1] < 5; if (atM) st.fireB = 1.4; st.fireB = Math.max(0, (st.fireB || 0) - dt);
       const cyc = st.fireT % 7, br = cyc < 1.5 || st.fireB > 0; if (br) for (let k = 0; k < 4; k++) { const sp = 7 + Math.random() * 5; addP(DINO.x + (Math.random() - .5) * 1.4, 3.7 + Math.random() * .6, DINO.zm + .2, (Math.random() - .5) * 1.4, .4 + Math.random() * 1.4, sp, .8 + Math.random() * .5, .9 + Math.random() * .7, Math.random() < .5 ? [1, .55, .12] : [1, .85, .3], 1.5, .9); }
       if (Math.random() < .25) [-.8, .8].forEach(x => addP(DINO.x + x, 8.1, DINO.zm + .3, 0, 1.0, 1.0, 1.4, .5, [.5, .5, .55], 1, .6));
       if (S.volcano && Math.random() < .5) addP(S.volcano[0] + (Math.random() - .5) * 1.5, S.volcano[1], S.volcano[2] + (Math.random() - .5) * 1.5, (Math.random() - .5) * 2.4, 5 + Math.random() * 4, (Math.random() - .5) * 2.4, 1.6, .35, [1, .5, .1], -4, .2); }
@@ -1214,7 +1233,7 @@ function makeFunfair(R, T) {
   }
   { const proto = Object.getPrototypeOf(R), orig = proto.setCamera;
     R.setCamera = function (cam, w, h) {
-      const g = window.__game; if (!fp.rig || fp.k <= 0 || (g && g.scene && g.scene !== S)) return orig.call(this, cam, w, h);
+      const g = window.__game; if (!fp.rig || fp.k <= 0 || (g && g.scene && g.scene !== S)) { const v0 = orig.call(this, cam, w, h); if (g && g.scene === S) { const Pm = M4.persp(cam.fov, w / h, 2.6, 270); v0.P = Pm; v0.VP = M4.mul(Pm, v0.V); v0.iVP = M4.inv(v0.VP); } return v0; }
       const k = fp.k * fp.k * (3 - 2 * fp.k), ps = cam.pitch, e3 = [cam.target[0], cam.target[1] + cam.dist * Math.sin(ps), cam.target[2] + cam.dist * Math.cos(ps)], L = (a, b) => a + (b - a) * k;
       const eye = [L(e3[0], fp.rig.eye[0]), L(e3[1], fp.rig.eye[1]), L(e3[2], fp.rig.eye[2])], tg = [L(cam.target[0], fp.rig.tgt[0]), L(cam.target[1], fp.rig.tgt[1]), L(cam.target[2], fp.rig.tgt[2])];
       const uu = fp.rig.up || [0, 1, 0], up = [L(0, uu[0]), L(1, uu[1]), L(0, uu[2])], V = M4.look(eye, tg, up), Pm = M4.persp(L(cam.fov, fp.rig.fov), w / h, L(1, .5), 260);
@@ -1223,16 +1242,20 @@ function makeFunfair(R, T) {
   { const mkBtn = () => { if (fp.btn || !document.body) return; const b = document.createElement('button'); b.textContent = '👁 视角'; b.style.cssText = 'position:fixed;top:62px;left:50%;transform:translateX(-50%);display:none;z-index:30;padding:6px 14px;border-radius:14px;border:1px solid rgba(151,174,255,.45);background:rgba(15,12,36,.72);color:#fff;font:700 13px system-ui,sans-serif;touch-action:manipulation';
       const tog = (ev) => { ev.preventDefault(); ev.stopPropagation(); fp.on = !fp.on; host.toast(fp.on ? '👁 第一视角' : '🎥 第三视角', 1400); }; b.addEventListener('pointerdown', ev => ev.stopPropagation()); b.addEventListener('click', tog); document.body.appendChild(b); fp.btn = b; const b2 = document.createElement('button'); b2.textContent = '↺ 回正'; b2.style.cssText = b.style.cssText; b2.style.top = '100px'; b2.addEventListener('pointerdown', ev => ev.stopPropagation()); b2.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); fp.yaw = 0; fp.pit = 0; }); document.body.appendChild(b2); fp.btn2 = b2; };
     if (document.body) mkBtn(); else addEventListener('DOMContentLoaded', mkBtn); }
-  S.bounds = { x0: -70, x1: 70, z0: -42, z1: 48 };
+  S.bounds = { x0: -70, x1: 70, z0: -56, z1: 48 };
   S.spawn = [0, 15];
-  S.camera = { dist: st.baseDist, pitch: CP, fov: .95, clampX: [-40, 40], clampZ: [-14, 34], lead: 3 };
-  S.cameraWide = { dist: 27, pitch: .16, fov: 1.1, clampX: [-40, 40], clampZ: [-14, 34], lead: 3 };      // 广角：压低镜头看远处天际线
+  S.camera = { dist: st.baseDist, pitch: CP, fov: .95, clampX: [-40, 40], clampZ: [-34, 34], lead: 3 };
+  S.cameraWide = { dist: 27, pitch: .16, fov: 1.1, clampX: [-40, 40], clampZ: [-34, 34], lead: 3 };      // 广角：压低镜头看远处天际线
   S.walkable = (x, z) => inside(x, z) && x > S.bounds.x0 && x < S.bounds.x1 && z > S.bounds.z0 && z < S.bounds.z1;
   S.npcRect = { x0: -52, x1: 52, z0: -12, z1: 32 };
   S.npcCount = 60;
   S.heightAt = (x, z) => (st.ride && Math.abs(x - st.rideX) < .1 && Math.abs(z - st.rideZ) < .1) ? st.rideY : 0;
   S._dbg = { cabin: CABIN[0].i.length, horse: HM[0].i.length, car: CARM.map(m => m.i.length) }; S._st = st; S._CO = CO; S.name = '星光嘉年华'; S.indoor = false;
-  S.env = (h) => { const e = envFair(h); try { tick(h, e); } catch (err) { if (!S._err) { S._err = 1; console.error('[funfair tick]', err); } } return e; };
+  const inView = (bb, VP, pad) => { const [a, b] = bb; let out = [0, 0, 0, 0, 0, 0];
+    for (let c = 0; c < 8; c++) { const x = c & 1 ? b[0] + pad : a[0] - pad, y = c & 2 ? b[1] + pad : a[1] - pad, z = c & 4 ? b[2] + pad : a[2] - pad, cx = VP[0] * x + VP[4] * y + VP[8] * z + VP[12], cy = VP[1] * x + VP[5] * y + VP[9] * z + VP[13], cz = VP[2] * x + VP[6] * y + VP[10] * z + VP[14], cw = VP[3] * x + VP[7] * y + VP[11] * z + VP[15];
+      if (cx >= -cw) out[0]++; if (cx <= cw) out[1]++; if (cy >= -cw) out[2]++; if (cy <= cw) out[3]++; if (cz >= -cw) out[4]++; if (cz <= cw) out[5]++; }
+    return out.every(n => n > 0); };
+  S.env = (h) => { if (!S.all) S.all = S.batches; const vw = R.view; if (vw && vw.VP && !S._noCull) { const L = S.all.filter(b => !b.bb || inView(b.bb, vw.VP, 4)); S._vis = L.length; S.batches = L; } else S.batches = S.all; const e = envFair(h); try { tick(h, e); } catch (err) { if (!S._err) { S._err = 1; console.error('[funfair tick]', err); } } return e; };
   return S;
 }
 

@@ -2,7 +2,7 @@
    Tracks live in assets/music/*.mp3. Scenes that are not listed in FILES (the KTV rooms) stay silent.
    Mobile browsers only allow sound after a tap, so audio starts on the first touch / click / key press. */
 (function () {
-  const FILES = { plaza: 'plaza', boutique: 'mall', bukit: 'bukit', klcc: 'klcc', beach: 'beach', funfair: 'funfair', merdeka: 'merdeka' };
+  const FILES = { plaza: 'plaza', boutique: 'mall', bukit: 'bukit', klcc: 'klcc', beach: 'beach', funfair: 'funfair', merdeka: 'merdeka', chapel: 'wedding', chapel_in: 'chapel', chapel_hall: 'ballroom' };
   const XF = 1.4;                                                  // crossfade seconds (between tracks and between loop repeats)
   const ls = { get(k, d) { try { const v = localStorage.getItem('sc_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('sc_' + k, JSON.stringify(v)); } catch (e) {} } };
   const M = { on: ls.get('music', 1) !== 0 && ls.get('music', 1) !== false, vol: ls.get('mvol', .6), want: null, ducked: false, cur: null, ctx: null, master: null, cache: {} };

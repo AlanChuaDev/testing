@@ -178,7 +178,7 @@ Net.on('_scene', () => { renderPanel(); });
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('#tabs button'); if (b && b.dataset.ch === 'team') b.classList.remove('dot'); }, true);
 
 /* ================= 界面 ================= */
-const PLACE = { plaza: '星光广场', bukit: '武吉免登', klcc: 'KLCC 双子塔', beach: '星光海滩', funfair: '星光嘉年华', boutique: '时尚街试衣间', ktv: 'KTV 大堂', ktv2: 'KTV 2F 走廊', ktv3: 'KTV 3F 走廊' };
+const PLACE = { plaza: '星光广场', bukit: '武吉免登', klcc: 'KLCC 双子塔', beach: '星光海滩', funfair: '星光嘉年华', merdeka: '独立广场', chapel: '星光教堂 · 庄园', chapel_in: '教堂大殿', chapel_hall: '宴会厅', boutique: '时尚街试衣间', ktv: 'KTV 大堂', ktv2: 'KTV 2F 走廊', ktv3: 'KTV 3F 走廊' };
 const sceneOf = room => String(room || '').replace(/^sv1:/, '');
 function placeName(room) { const id = sceneOf(room); if (!id) return '离线'; if (/^k2_/.test(id)) return 'KTV VIP 包间'; if (/^k3_/.test(id)) return 'KTV 包间'; return PLACE[id] || id; }
 function teleportTarget(room) { const id = sceneOf(room); if (/^k2_/.test(id)) return 'ktv2'; if (/^k3_/.test(id)) return 'ktv3'; return PLACE[id] ? id : null; }

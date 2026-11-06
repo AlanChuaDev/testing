@@ -154,6 +154,13 @@ const wss = new WebSocket.Server({ server: httpServer, maxPayload: 64 * 1024 });
 const rooms = new Map(); // room -> Map(playerId -> {ws, info, state})
 const byPid = new Map(); // playerId -> ws
 const mutes = new Map(); // pub -> 禁言到期时间
+/* 封号：pub -> { until(0=永久), name, by, at }；整份存在 Firestore gm/bans 一个文档里，重启不丢；到期自动失效 */
+const bans = new Map();
+const bansReady = (async () => { if (!S) return; try { const d = await S.store.get("gm", "bans"); for (const [p, b] of Object.entries((d && d.list) || {})) bans.set(p, b); } catch (e) { console.warn("bans load failed:", e.message); } })();
+function saveBans() { if (!S) return; const o = {}; for (const [p, b] of bans) if (!b.until || b.until > Date.now()) o[p] = b; S.store.set("gm", "bans", { list: o }).catch((e) => console.warn("bans save failed:", e.message)); }
+function banOf(pub) { const b = bans.get(pub); if (!b) return null; if (b.until && b.until <= Date.now()) { bans.delete(pub); saveBans(); return null; } return b; }
+const BAN_MINS = [15, 30, 60, 1440, 4320, 0];   // 15 分 / 30 分 / 1 小时 / 1 天 / 3 天 / 永久(0)
+const GM_MAX_GIFT = 100000;                     // GM 单次最多送多少金币
 const reportLog = []; // 最近的举报记录（内存里留 300 条）
 const gmActionLog = []; // GM 管理操作审计（内存留 200 条）
 const reportsOn = new Map(); // targetPub -> [{ by, at }]
@@ -473,7 +480,7 @@ wss.on("connection", (ws) => {
       if (ws.helloDone) return;
       ws.helloDone = true;
       if (m.token && AUTH) {
-        try { const a = await AUTH.verify(m.token); ws.fuid = a.uid; ws.pub = pubOf("fb:" + a.uid); ws.authed = true; kickDup(ws); ws.acct = { anon: a.anon, email: a.email }; }
+        try { const a = await AUTH.verify(m.token); ws.fuid = a.uid; ws.pub = pubOf("fb:" + a.uid); ws.authed = true; kickDup(ws); ws.acct = { anon: a.anon, email: a.email }; await bansReady; const bn = banOf(ws.pub); if (bn) { console.log("BANNED_LOGIN", myTime(), JSON.stringify(bn.name || ""), "pub=" + ws.pub); ws.kicked = true; send(ws, { type: "banned", until: bn.until, name: bn.name }); setTimeout(() => { try { ws.close(4003, "banned"); } catch {} }, 300); setTimeout(() => { try { ws.terminate(); } catch {} }, 2500); return; } }
         catch (e) { send(ws, { type: "auth_fail", message: "登录凭证无效，已作为游客进入" }); }
       }
       if (!ws.authed) { const uid = String(m.uid || ""); if (uid.length >= 8 && uid.length <= 80) ws.pub = pubOf(uid); ws.name = cleanName(m.name); ws.blocks = new Set((Array.isArray(m.blocks) ? m.blocks : []).slice(0, 200).map((x) => String(x).slice(0, 16))); }
@@ -532,7 +539,7 @@ wss.on("connection", (ws) => {
       if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
       const target = byPid.get(String(m.pid || ""));
       if (!target || target === ws || !target.pub) return send(ws, { type: "gmActionResult", ok: false, message: "目标玩家不在线或不能对自己操作" });
-      const action = String(m.action || "");
+      let action = String(m.action || "");
       const targetRoom = target.room || null;
       const now = Date.now();
       if (action === "mute") {
@@ -549,6 +556,25 @@ wss.on("connection", (ws) => {
         send(target, { type: "gmKicked", message: "你已被 GM 請出当前房间" });
         if (target.room) leaveRoom(target);
         send(ws, { type: "gmActionResult", ok: true, message: "已请出 " + targetName });
+      } else if (action === "ban") {
+        if (!target.authed) return send(ws, { type: "gmActionResult", ok: false, message: "只能封已登录的账号（游客没有账号可封）" });
+        if (target.isGM) return send(ws, { type: "gmActionResult", ok: false, message: "不能封 GM" });
+        const mins = BAN_MINS.includes(Number(m.minutes)) ? Number(m.minutes) : 60;
+        const until = mins ? now + mins * 60000 : 0, nm = target.name;
+        bans.set(target.pub, { until, name: nm, by: ws.name, at: now }); saveBans();
+        target.kicked = true; send(target, { type: "banned", until, name: nm });
+        onClose(target); try { target.close(4003, "banned"); } catch {} setTimeout(() => { try { target.terminate(); } catch {} }, 2500);
+        send(ws, { type: "gmActionResult", ok: true, message: "已封号 " + nm + "（" + (mins ? (mins >= 1440 ? mins / 1440 + " 天" : mins >= 60 ? mins / 60 + " 小时" : mins + " 分钟") : "永久") + "）" });
+      } else if (action === "coins") {
+        const n = Math.round(Number(m.amount) || 0);
+        if (!W) return send(ws, { type: "gmActionResult", ok: false, message: "钱包没有启用" });
+        if (!target.authed) return send(ws, { type: "gmActionResult", ok: false, message: "只能送给已登录的账号（游客没有钱包）" });
+        if (!Number.isSafeInteger(n) || n < 1 || n > GM_MAX_GIFT) return send(ws, { type: "gmActionResult", ok: false, message: "数额要在 1 ~ " + GM_MAX_GIFT + " 之间" });
+        let total; try { total = await W.grant(target.pub, n); } catch (e) { return send(ws, { type: "gmActionResult", ok: false, message: "送金币失败：" + e.message }); }
+        try { send(target, Object.assign({ type: "wallet" }, await W.view(target.pub))); } catch {}
+        send(target, { type: "toast", message: "🎁 GM 送了你 " + n + " 金币" });
+        send(ws, { type: "gmActionResult", ok: true, message: "已送给 " + target.name + " " + n + " 金币（对方现在有 " + total + "）" });
+        action = "coins:" + n;
       } else return send(ws, { type: "gmActionResult", ok: false, message: "未知管理操作" });
       const rec = { at: new Date(now).toISOString(), by: ws.name, action, target: target.name, room: targetRoom };
       gmActionLog.push(rec); if (gmActionLog.length > 200) gmActionLog.shift();
@@ -611,6 +637,21 @@ wss.on("connection", (ws) => {
       if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
       const list = [...byPid.values()].filter(c => !c.closed).map(c => ({ pid:c.playerId, pub:c.pub, name:c.name, room:c.room, isGM:!!c.isGM, invisible:!!c.gmInvisible, muted:((mutes.get(c.pub)||0)>Date.now()?(mutes.get(c.pub)-Date.now()):0), state:c.room ? (rooms.get(c.room)?.get(c.playerId)?.state || null) : null }));
       return send(ws, { type:"gmPlayers", list, n:list.length, invisible:!!ws.gmInvisible });
+    }
+
+    if (m.type === "gm_bans") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      await bansReady; const list = []; for (const [pub] of bans) { const b = banOf(pub); if (b) list.push({ pub, name: b.name, until: b.until, by: b.by, at: b.at }); }
+      return send(ws, { type: "gmBans", list });
+    }
+    if (m.type === "gm_unban") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const pub = String(m.pub || "").slice(0, 32), b = bans.get(pub);
+      if (!b) return send(ws, { type: "gmActionResult", ok: false, message: "这个账号没有被封" });
+      bans.delete(pub); saveBans();
+      const rec = { at: new Date().toISOString(), by: ws.name, action: "unban", target: b.name, room: null }; gmActionLog.push(rec); if (gmActionLog.length > 200) gmActionLog.shift(); console.log("GM_ACTION", JSON.stringify(rec));
+      send(ws, { type: "gmActionResult", ok: true, message: "已解封 " + (b.name || "玩家") });
+      return send(ws, { type: "gmBans", list: [...bans].map(([p, x]) => banOf(p) && { pub: p, name: x.name, until: x.until, by: x.by, at: x.at }).filter(Boolean) });
     }
 
     if (m.type === "gm_invisible") {
