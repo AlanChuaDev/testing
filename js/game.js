@@ -39,7 +39,7 @@ function addMsg(ch, name, text, me, sys, isGM) {
 }
 function appendLog(m) {
   const log = $('log'), d = document.createElement('div'); d.className = 'm' + (m.me ? ' me' : '') + (m.sys ? ' sys' : '');
-  if (m.sys) d.textContent = m.text; else { if (m.isGM) { const badge = document.createElement('span'); badge.className = 'gm-badge'; badge.textContent = '✦ GM ✦'; d.append(badge, ' '); } const b = document.createElement('b'); b.textContent = m.name; if (m.isGM) b.className = 'gm-name'; d.append(b, ': ' + m.text); }
+  if (m.sys) d.textContent = m.text; else { if (m.isGM) { const badge = document.createElement('span'); badge.className = 'gm-badge'; badge.textContent = '✦ GM ✦'; d.append(badge, ' '); } const b = document.createElement('b'); b.textContent = m.name; d.append(b, ': ' + m.text); }
   const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 12; log.appendChild(d); while (log.children.length > 80) log.removeChild(log.firstChild); if (stick) log.scrollTop = log.scrollHeight;
 }
 function renderLog() { $('log').innerHTML = ''; G.chat[G.tab].forEach(appendLog); $('log').scrollTop = 1e9; }
@@ -109,9 +109,9 @@ function randomSpot(sc) { for (let k = 0; k < 40; k++) { const r = sc.npcRect, x
 
 /* ---------------- scene switching ---------------- */
 /* ======================= integration glue (maps <-> hub, seats, interactions, buttons) ======================= */
-const HUB = [['plaza', '星光广场', '⭐'], ['merdeka', '独立广场', '🏛️'], ['bukit', '武吉免登', '🌃'], ['klcc', 'KLCC 双子塔', '🏙️'], ['beach', '星光海滩', '🏖️'], ['funfair', '星光嘉年华', '🎡'], ['chapel', '星光教堂 · 婚礼庄园', '💒']];   // KTV / 试衣间 are buildings inside the plaza, not hub maps
-const HUB_DROP = { klcc: ['to_bukit', 'monorail_k'], bukit: ['monorail'], beach: ['plaza'], funfair: ['plaza'], merdeka: ['plaza'] };   // each map's own travel portals -> replaced by ONE hub portal
-const HUB_AT = { plaza: [-10, 10], chapel: [12, 72] };
+const HUB = [['plaza', '星光广场', '⭐'], ['bukit', '武吉免登', '🌃'], ['klcc', 'KLCC 双子塔', '🏙️'], ['beach', '星光海滩', '🏖️'], ['funfair', '星光嘉年华', '🎡']];   // KTV / 试衣间 are buildings inside the plaza, not hub maps
+const HUB_DROP = { klcc: ['to_bukit', 'monorail_k'], bukit: ['monorail'], beach: ['plaza'], funfair: ['plaza'] };   // each map's own travel portals -> replaced by ONE hub portal
+const HUB_AT = { plaza: [-10, 10] };
 /* 动作菜单：c=动画名（也是联机同步用的名字，最长 12 个字符，且必须写进 net.js 的 POSES）  t=持续秒数  b=头顶气泡  sit=坐着能不能做
    ✔ 和 ❌ 放在最前面。 */
 const ACTIONS = [
@@ -129,7 +129,7 @@ const ACTIONS = [
 ];
 function pay(c, ok, msg) { if (G.coinCount < c) { toast('金币不够啦（需要 ' + c + '）'); return false; } setCoins(G.coinCount - c); toast(ok, 2400); if (msg) setBubble(G.me, msg); return true; }
 function addSeat(sc, x, z, yaw, h) { const ap = [x + Math.sin(yaw) * 1.15, z + Math.cos(yaw) * 1.15], q = { x, z, yaw, h, ap, who: null, res: null }; q.hot = { id: 'sit', seat: q, x: ap[0], z: ap[1], r: 1.4 }; (sc.seats = sc.seats || []).push(q); return q; }
-const PORTAL_UI = { chapel: ['⛪', '星光教堂'], chapel_in: ['⛪', '教堂大殿'], chapel_hall: ['🥂', '宴会厅'], boutique: ['👗', '试衣间'], ktv: ['🎤', 'K歌厅'], pavilion: ['🛍️', '商场'], plaza: ['🚪', '回广场'] };
+const PORTAL_UI = { boutique: ['👗', '试衣间'], ktv: ['🎤', 'K歌厅'], pavilion: ['🛍️', '商场'], plaza: ['🚪', '回广场'] };
 function setEnter(best) {   // the yellow button lives above the six action buttons: grey + unclickable unless something is in range
   const b = $('enterBtn'), tx = $('enterText'), ic = $('enterIcon'); if (!b) return;
   b.disabled = !best;
@@ -168,18 +168,6 @@ function fixSeatAp(sc) {
     for (const d of [1.15, 1.5, 1.9, 2.4, 2.9]) { for (const ang of [0, .5, -.5, 1, -1, 1.6, -1.6, 2.4, -2.4, 3.14]) { const a = s.yaw + ang, x = s.x + Math.sin(a) * d, z = s.z + Math.cos(a) * d; if (!blocked(sc, x, z, .3)) { s.ap = [x, z]; if (s.hot) { s.hot.x = x; s.hot.z = z; } done = true; break; } } if (done) break; }
   }
 }
-/* 出生点和传送阵放在一起：把传送阵挪到出生点旁边（约 3 米，优先放在人物正前方），玩家一进图就能看到。
-   先找「周围一圈都没有障碍」的位置，找不到再放宽，最后实在没有就保持原位。 */
-function placeHubAtSpawn(sc, hub) {
-  if (!sc.spawn) return false;
-  const sx = sc.spawn[0], sz = sc.spawn[1], DIST = [3.2, 3.8, 4.6, 2.6], ANG = [0, .6, -.6, 1.2, -1.2, 1.9, -1.9, 2.6, -2.6, PI];   // 角度 0 = 正前方（-z，镜头看过去的方向）
-  const ringFree = (x, z) => { for (let k = 0; k < 8; k++) if (blocked(sc, x + Math.cos(k * PI / 4) * 1.1, z + Math.sin(k * PI / 4) * 1.1, .2)) return false; return true; };
-  for (const strict of [true, false]) for (const d of DIST) for (const a of ANG) {
-    const x = sx + Math.sin(a) * d, z = sz - Math.cos(a) * d;
-    if (!blocked(sc, x, z, .5) && (!strict || ringFree(x, z))) { hub.x = x; hub.z = z; return true; }
-  }
-  return false;
-}
 function glueScene(id, sc) {
   // 1) one hub portal per map
   if (HUB.some(h => h[0] === id)) {
@@ -187,7 +175,7 @@ function glueScene(id, sc) {
     for (const p of sc.portals) if (drop.includes(p.id)) { hub = p; break; }
     if (hub) { for (let i = sc.portals.length - 1; i >= 0; i--) if (drop.includes(sc.portals[i].id) && sc.portals[i] !== hub) sc.portals.splice(i, 1); }
     else { const at = HUB_AT[id]; if (at) { hub = { x: at[0], z: at[1] }; sc.portals.push(hub); } }
-    if (hub) { Object.assign(hub, { id: 'hub', hub: true, label: '传送阵', icon: '🌀', color: [.55, .8, 1], r: 1.6 }); delete hub.to; delete hub.spawn; delete hub.auto; placeHubAtSpawn(sc, hub); }
+    if (hub) { Object.assign(hub, { id: 'hub', hub: true, label: '传送阵', icon: '🌀', color: [.55, .8, 1], r: 1.6 }); delete hub.to; delete hub.spawn; delete hub.auto; }
   }
   if (id === 'bukit') { sc.hotspots = sc.hotspots.filter(h => h.id !== 'skybridge'); if (!sc.onUse) sc.onUse = bukitUse; }
   // 2) seats for maps that do not define any (Bukit Bintang benches, beach benches + fire logs)
@@ -200,7 +188,7 @@ function glueScene(id, sc) {
 }
 
 function getScene(id) {
-  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'chapel' && Scenes.makeChapel ? Scenes.makeChapel(G.R, G.T) : id === 'chapel_in' && Scenes.makeChapelIn ? Scenes.makeChapelIn(G.R, G.T) : id === 'chapel_hall' && Scenes.makeChapelHall ? Scenes.makeChapelHall(G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'merdeka' && Scenes.makeMerdeka ? Scenes.makeMerdeka(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
+  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
   if (!G.scenes[id]._glued) { G.scenes[id]._glued = true; glueScene(id, G.scenes[id]); }
   return G.scenes[id];
 }
@@ -288,15 +276,6 @@ function ktvUpdate(dt) {
   } else { $('banner').hidden = true; G.stg = { mode: 'idle', queue: K.queue.map(q => q.name) }; }
   renderQueue();
 }
-/* 外观绑定账号：服务器告诉我「这个账号存过的外观」→ 以账号为准，换设备 / 清缓存后外观还在 */
-function adoptLook(m) {
-  if (!m || !m.has || !m.outfit || !G.me) return false;
-  Object.assign(G.me.outfit, DEFAULT_OUTFIT, m.outfit);
-  G.owned.length = 0; (m.owned || []).forEach(x => G.owned.push(x)); store.set('owned', G.owned);
-  applyOutfit(G.me.inst, G.me.outfit); store.set('outfit', G.me.outfit); try { drawPortrait(); } catch (e) {}
-  return true;
-}
-if (window.Net) Net.on('me_look', m => { if (!adoptLook(m) && m && m.has) G.pendingLook = m; });
 if (window.Net) Net.on('stage', m => {           // 服务器下发：这个房间的排队情况（唯一的真相）
   const K = G.ktv, my = Net.myId(); K.online = true;
   K.queue = (m.queue || []).map(q => Object.assign({}, q, { you: q.pid === my }));
@@ -511,6 +490,8 @@ function render() {
   });
   // occluders that currently hide the player: translucent layer
   for (const b of sc.batches) if (b.mat.mode === 0 && b.fade < .995) R.draw(b);
+  // KLCC solid monorail cars (optional scene-specific opaque geometry)
+  if (sc.drawSolid) { R.gl.useProgram(R.prog.p); sc.drawSolid(R, G.t, G); }
   // glows & additive layers
   if (sc.dyn) {
     for (const k of ['spray', 'beam', 'spark', 'pool']) { const m = dynFx[k]; m.v.length = 0; m.i.length = 0; m.n = 0; }
@@ -544,9 +525,7 @@ function render() {
       const tg = tt ? 4 * sc2 : 0, tw = nw + bw + gap + tbw + tg + 14 * sc2, bh = 18 * sc2, ty = top[1] - 6 * sc2 - bh / 2, pl = top[0] - tw / 2, nameCx = pl + 7 * sc2 + tbw + tg + nw / 2;
       pill(ov, pl, ty - bh / 2, tw, bh, e.isGM ? 'rgba(43,20,82,.96)' : (e.isMe && !(cs && cs.nameColor) ? '#ffcf4a' : 'rgba(20,16,44,.78)'));
       if (tt) { const th = bh - 4 * sc2; pill(ov, pl + 7 * sc2, ty - th / 2, tbw, th, tt.bg); ov.font = `800 ${tf}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; ov.fillStyle = tt.fg; ov.fillText(tt.name, pl + 7 * sc2 + tbw / 2, ty + 1); ov.font = `700 ${fs}px system-ui,"PingFang SC","Noto Sans SC",sans-serif`; }
-      let nameFill = (cs && cs.nameColor) || (e.isMe ? '#2a1c00' : '#f4efff');
-      if (e.isGM) { const gr = ov.createLinearGradient(nameCx - nw / 2, 0, nameCx + nw / 2, 0), h0 = G.t * 70; for (let gi = 0; gi <= 4; gi++) gr.addColorStop(gi / 4, 'hsl(' + ((h0 + gi * 72) % 360).toFixed(0) + ',100%,72%)'); nameFill = gr; }   // GM 名字：彩虹渐变一直流动
-      ov.fillStyle = nameFill; ov.fillText(e.name, nameCx, ty + 1);
+      ov.fillStyle = (cs && cs.nameColor) || (e.isMe ? '#2a1c00' : '#f4efff'); ov.fillText(e.name, nameCx, ty + 1);
       if (e.isGM) { ov.font = `900 ${Math.max(9, fs * .72)}px system-ui,sans-serif`; ov.fillStyle = '#ffdf75'; ov.fillText('✦ GM ✦', nameCx + nw / 2 + gap + bw / 2, ty + 1); }
       if (e.speaking) { const bx = top[0] + tw / 2 + 13 * sc2, r = 10 * sc2, pl = .5 + .5 * Math.sin(G.t * 9); ov.fillStyle = 'rgba(70,230,130,' + (.35 + .25 * pl) + ')'; ov.beginPath(); ov.arc(bx, ty, r + 3 * sc2 * pl, 0, 7); ov.fill(); ov.fillStyle = '#18c56a'; ov.beginPath(); ov.arc(bx, ty, r, 0, 7); ov.fill(); ov.font = `${12 * sc2}px system-ui,sans-serif`; ov.fillStyle = '#fff'; ov.fillText('🎙', bx, ty + 1); } }
   }
@@ -657,7 +636,6 @@ async function boot() {
     let buf; if (window.GLB64) { const s = atob(window.GLB64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); buf = u.buffer; } else buf = await (await fetch('assets/girl.glb')).arrayBuffer();
     G.model = await GLBChar.loadModel(buf, G.GR); GLBChar.addActions(G.model);
     const saved = store.get('outfit', null); G.me = makeEntity(0, 2.5, (window.Profile && Profile.name) || '我', Object.assign({}, DEFAULT_OUTFIT, saved || {}), true);
-    if (G.pendingLook) { adoptLook(G.pendingLook); G.pendingLook = null; }
     { const st = Scenes.PLAZA_STYLES[G.style] || Scenes.PLAZA_STYLES.cozy; G.hour = QS.get('t') ? parseFloat(QS.get('t')) : st.hour; if (QS.get('t')) G.timeMode = 'x'; }
     G.scene = getScene('plaza'); enterScene('plaza'); spawnCoins();
     if (QS.get('pz')) { G.me.z = parseFloat(QS.get('pz')); G.cam.target[2] = G.me.z - G.scene.camera.lead; }
@@ -682,8 +660,7 @@ async function boot() {
     requestAnimationFrame(frame);
     G.api = { goTo, openSongs, openWardrobe, enterScene, sitDown, standUp, nearSeat, makeEntity, applyOutfit, addMsg, setBubble, toast }; window.__game = G;
     if (window.Net) Net.start(G);
-    if (store.get('new_char', false)) { store.set('new_char', false); setTimeout(() => Creator.open({ newChar: true }), 600); }   // 新账号：创建人物面板里带「昵称」输入框
-    else if (store.get('open_creator', false)) { store.set('open_creator', false); setTimeout(() => Creator.open(), 600); }   // 登录页「修改角色」   // [创建面板] 新建角色后第一次进游戏：自动弹出创建人物面板
+    if (store.get('new_char', false)) { store.set('new_char', false); setTimeout(() => Creator.open(), 600); }   // [创建面板] 新建角色后第一次进游戏：自动弹出创建人物面板
   } catch (err) { console.error(err); text.textContent = '加载失败：' + err.message + '（需要支持 WebGL2 的浏览器）'; }
 }
 (window.loginReady || Promise.resolve()).then(boot);
