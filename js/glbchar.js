@@ -109,6 +109,11 @@ async function loadModel(url, renderer) {
       const skinned = p.attributes.JOINTS_0 != null && nd.skin != null;
       const J = skinned ? Uint16Array.from(readAcc(g, bin, p.attributes.JOINTS_0, false).data) : new Uint16Array(N * 4);
       const W = skinned ? readAcc(g, bin, p.attributes.WEIGHTS_0, true).data : (() => { const w = new Float32Array(N * 4); for (let i = 0; i < N; i++) w[i * 4] = 1; return w; })();
+      // [动作穿模修复] 短裤/裙子的顶点在 A 字站姿下贴着手，导出时混进了手臂权重，抬手时布料被手拉出尖角。裤裙不该跟手臂走，这里把手臂权重去掉
+      if (skinned && /^(Shorts|HoodieShorts|ShortsM|Skirt)$/.test(nd.name || '')) {
+        const jn = g.skins[nd.skin].joints.map(i => g.nodes[i].name), isArm = jn.map(x => /^(upperarm|forearm|hand)\./.test(x)), hipsJ = Math.max(0, jn.indexOf('hips'));
+        for (let i = 0; i < N; i++) { let sum = 0; for (let k = 0; k < 4; k++) { if (isArm[J[i * 4 + k]]) W[i * 4 + k] = 0; sum += W[i * 4 + k]; } if (sum < 1e-4) { J[i * 4] = hipsJ; W[i * 4] = 1; for (let k = 1; k < 4; k++) W[i * 4 + k] = 0; } else for (let k = 0; k < 4; k++) W[i * 4 + k] /= sum; }
+      }
       let idx = p.indices != null ? readAcc(g, bin, p.indices, false).data : Uint32Array.from({ length: N }, (_, i) => i);
       if (idx instanceof Uint8Array) idx = Uint16Array.from(idx);
       const mat = g.materials && p.material != null ? g.materials[p.material] : {}, pbr = mat.pbrMetallicRoughness || {};
@@ -298,6 +303,7 @@ function createRenderer(canvas, opts) {
     if (clear) { gl.clearColor(clear[0], clear[1], clear[2], clear[3]); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); }
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
   };
+  const HAND_G = { def: ['relax', 'relax'], clap: ['open', 'open'], heart: ['open', 'open'], wave: ['relax', 'open'], cheer: ['open', 'open'], thumbs: ['relax', 'thumbup'], point: ['relax', 'point'], photo: ['relax', 'peace'], signok: ['relax', 'fist'], signno: ['relax', 'fist'], rc: ['fist', 'fist'], rs: ['fist', 'fist'], rh: ['fist', 'fist'], ru: ['open', 'open'], rf: ['relax', 'open'] };
   r.draw = (inst, VP, o) => {
     o = o || {}; gl.useProgram(pr);
     const m = inst.model;
@@ -308,6 +314,14 @@ function createRenderer(canvas, opts) {
     gl.uniform1i(U.uTex, 0);
     const outW = o.outline == null ? .0034 : o.outline;
     let upSkin = -2;
+    // 手势：Body/BodyM 不含手，手是 HandL_xxx / HandR_xxx 独立网格，按当前动作选手势并沿用身体肤色
+    if (m.meshes.some(q => q.name === 'HandL_relax')) {
+      const gk = HAND_G[String(inst.clip || '').replace('sit_', '')] || HAND_G.def;
+      
+      for (const q of m.meshes) { const mt = /^Hand([LR])(M?)_(\w+)$/.exec(q.name); if (!mt) continue;
+        const male = !!mt[2]; inst.hidden[q.name] = mt[3] !== gk[mt[1] === 'L' ? 0 : 1] || !!(male ? inst.hidden.BodyM : inst.hidden.Body);
+        if (inst.tints) inst.tints[q.name] = inst.tints[male ? 'BodyM' : 'Body']; }
+    }
     const pass = (outlinePass) => {
       gl.cullFace(outlinePass ? gl.FRONT : gl.BACK);
       for (const p of m.meshes) {
@@ -362,13 +376,14 @@ function addActions(model) {
         const p = model.parent[i], nm = g.nodes[i].name, spec = (k.r || {})[nm];
         const desired = spec ? qm(spec, Wr[i]) : (p < 0 ? rr(i) : qm(Wn[p], rr(i)));
         Wn[i] = desired; const par = p < 0 ? ID : Wn[p];
-        if (spec) loc[nm] = qm(qi(par), desired);
+        if (spec) { let l = qm(qi(par), desired);
+          loc[nm] = l; }
       }
       return loc;
     });
     bones.forEach(b => { const v = []; perKey.forEach(loc => v.push(...loc[b])); ch.push({ node: names[b], path: 'rotation', t: tt.slice(), v }); });
     if (keys.some(k => k.hips)) { const v = []; keys.forEach(k => { const h = k.hips || [0, hipsRest[1], 0]; v.push(h[0] + hipsRest[0], h[1], h[2] + hipsRest[2]); }); ch.push({ node: names.hips, path: 'translation', t: tt.slice(), v }); }
-    if (!model.anims[name] || name === 'dance' || name === 'clap') model.anims[name] = { duration: dur, ch };
+    if (!model.anims[name] || name === 'dance' || name === 'clap' || name === 'wave') model.anims[name] = { duration: dur, ch };
   }
   const arms = (s, pitchU, rollU, pitchF, rollF) => { const m = s === 'L' ? 1 : -1; return { ['upperarm.' + s]: pr(pitchU, m * rollU), ['forearm.' + s]: pr(pitchF, m * rollF) }; };
   const legs = (s, pitchT, pitchC) => ({ ['thigh.' + s]: pr(pitchT, 0), ['calf.' + s]: pr(pitchC, 0) });
@@ -387,7 +402,7 @@ function addActions(model) {
     { spine: pr(0, 7 * sw), chest: pr(0, 4 * sw), head: pr(-3, -6 * sw) }) });
   clip('dance', 1.6, [Object.assign({ t: 0 }, dance(1, 1, 1)), Object.assign({ t: .4 }, dance(0, 1, 1)), Object.assign({ t: .8 }, dance(-1, -1, -1)), Object.assign({ t: 1.2 }, dance(0, -1, -1)), Object.assign({ t: 1.6 }, dance(1, 1, 1))]);
   // ----- clap -----
-  const clap = (open) => ({ r: merge(arms('L', -38, open ? 8 : -34, -98, open ? 6 : -104), arms('R', -38, open ? 8 : -34, -98, open ? 6 : -104), { head: pr(-4, 0) }) });
+  const clap = (open) => ({ r: merge(arms('L', -62, open ? 8 : -34, -125, open ? 6 : -104), arms('R', -62, open ? 8 : -34, -125, open ? 6 : -104), { head: pr(-4, 0) }) });
   clip('clap', .5, [Object.assign({ t: 0 }, clap(true)), Object.assign({ t: .22 }, clap(false)), Object.assign({ t: .5 }, clap(true))]);
 
   // ===== 新动作（v3）：举牌 ✔/❌、拍照、鞠躬、比心、点赞、指向，以及坐着也能做的版本（sit_xxx） =====
@@ -412,6 +427,29 @@ function addActions(model) {
   // 指向：右臂向前伸直，微微上下点
   const point = (b) => ({ r: merge(arms('R', -8 - b * 3, 78 + b * 3, -8, 78 + b * 3), arms('L', 4, 26, -78, -34), { head: pr(0, 0, -16), chest: pr(0, 0, -5) }) });
   clip('point', .8, [Object.assign({ t: 0 }, point(0)), Object.assign({ t: .4 }, point(1)), Object.assign({ t: .8 }, point(0))]);
+  // ----- wave：原动画手臂竖直举过头、手会插进头发，换成“手臂向外侧抬起、小臂在头旁边左右摆” -----
+  { const w = (b) => ({ r: merge(arms('R', -14, 82, -34, 128 + b * 22), arms('L', 3, 6, -10, -4), { head: pr(-1, 3 - b * 4), spine: pr(0, -2) }) });
+    clip('wave', 1, [Object.assign({ t: 0 }, w(0)), Object.assign({ t: .25 }, w(1)), Object.assign({ t: .5 }, w(-1)), Object.assign({ t: .75 }, w(1)), Object.assign({ t: 1 }, w(0))]); }
+  // ===== 游乐设施乘坐动作（嘉年华）：rf 摩天轮 / rc 过山车抓杆 / ru 过山车下坡举手 / rs 摇摆飞椅 / rh 旋转木马骑马 =====
+  // rf rc ru rs 只定义“手臂+上身+头”，下面会和 sit 的腿拼成 sit_rf 等；rh 是完整的骑马姿势（腿分开夹马背）
+  const lookY = d => ({ head: pr(0, 0, d) });
+  const rideKeys = (name, dur, f) => clip(name, dur, f);
+  rideKeys('rf', 6, [0, 1.5, 3, 3.6, 4.2, 4.8, 6].map((t, i) => { const w = (i >= 3 && i <= 5) ? 1 : 0, look = [0, 14, 0, 0, 0, 0, 0][i];
+    return Object.assign({ t }, { r: merge(arms('L', -22, 4, -100, -10), w ? arms('R', -34, 34 + (i === 4 ? 10 : 0), -128, -34 + (i === 4 ? 18 : 0)) : arms('R', -22, 4, -100, -10), { head: pr(0, 0, look), spine: pr(-2, 0) }) }); }));
+  rideKeys('rc', 1, [0, .5, 1].map((t, i) => ({ t, r: merge(arms('L', -52, 8, -102, -22), arms('R', -52, 8, -102, -22), { spine: pr(-3 + i % 2 * 1.2, 0), head: pr(-3, i % 2 ? 1.5 : -1.5) }) })));
+  rideKeys('ru', 1, [0, .5, 1].map((t, i) => ({ t, r: merge(arms('L', -166 + i % 2 * 5, -9, -170 + i % 2 * 4, -6), arms('R', -166 + i % 2 * 5, -9, -170 + i % 2 * 4, -6), { spine: pr(-5, 0), head: pr(-10, i % 2 ? 2 : -2) }) })));
+  rideKeys('rs', 4, [0, 1, 2, 3, 4].map((t, i) => ({ t, r: merge(arms('L', -40, 14, -82, -12), arms('R', -40, 14, -82, -12), { spine: pr(-2, 0), head: pr(0, [0, 3, 0, -3, 0][i], [0, 10, 0, -10, 0][i]) }) })));
+  // 骑马：髋降低、大腿向前下方并向外分开夹住马背，小腿自然下垂，双手抓前面的杆
+  const RH_HIPS = .62;
+  const rh = b => ({ hips: [0, RH_HIPS - .004 * b, -.03], r: merge(legs('L', -52, 12), legs('R', -52, 12), { 'thigh.L': merge(pr(-52, 34)), 'thigh.R': merge(pr(-52, -34)) }, arms('L', -50, 8, -96, -14), arms('R', -50, 8, -96, -14), { spine: pr(-1 + b, 0), head: pr(-2, 0, 6 * (b ? 1 : -1)) }) });
+  rideKeys('rh', 2, [Object.assign({ t: 0 }, rh(0)), Object.assign({ t: 1 }, rh(1)), Object.assign({ t: 2 }, rh(0))]);
+  // ----- 普通坐姿：原动画的手会压进裙子/大腿，把手臂换成“双手轻放在身前”的姿势 -----
+  if (model.anims.sit && !model.anims.sit.__fixed) {
+    const sa = model.anims.sit, AR = new Set(['upperarm.L', 'forearm.L', 'hand.L', 'upperarm.R', 'forearm.R', 'hand.R'].map(n => names[n]));
+    clip('sit_arms_tmp', 1, [{ t: 0, r: merge(arms('L', -22, 4, -100, -10), arms('R', -22, 4, -100, -10)) }, { t: 1, r: merge(arms('L', -22, 4, -100, -10), arms('R', -22, 4, -100, -10)) }]);
+    const na = model.anims.sit_arms_tmp; delete model.anims.sit_arms_tmp;
+    model.anims.sit = { duration: sa.duration, ch: sa.ch.filter(c => !AR.has(c.node)).concat(na.ch.filter(c => AR.has(c.node)).map(c => ({ node: c.node, path: c.path, t: [0, sa.duration], v: c.v.slice(0, c.path === 'rotation' ? 4 : 3).concat(c.v.slice(0, c.path === 'rotation' ? 4 : 3)) }))), __fixed: true };
+  }
   // ----- 坐着做动作：保留 sit 的腿/腰，只把手臂换成动作里的手臂 -----
   if (model.anims.sit) {
     const ARM = new Set(['upperarm.L', 'forearm.L', 'hand.L', 'upperarm.R', 'forearm.R', 'hand.R'].map(n => names[n]));
@@ -425,6 +463,14 @@ function addActions(model) {
         ch.push({ node: c.node, path: c.path, t, v });
       });
       model.anims['sit_' + n] = { duration: D, ch };
+    });
+    // 乘坐用：手臂 + 脊柱/胸/头 都换成乘坐动作里的（腿腰高度仍来自 sit）
+    const TOR = new Set([...ARM, ...['spine', 'chest', 'head', 'neck'].map(n => names[n]).filter(x => x != null)]);
+    ['rf', 'rc', 'ru', 'rs'].forEach(n => {
+      const a = model.anims[n]; if (!a || model.anims['sit_' + n]) return;
+      const srcNodes = new Set(a.ch.map(c => c.node)), ch = base.ch.filter(c => !(TOR.has(c.node) && srcNodes.has(c.node)) && !ARM.has(c.node));
+      a.ch.forEach(c => { if (TOR.has(c.node)) ch.push({ node: c.node, path: c.path, t: c.t.slice(), v: c.v.slice() }); });
+      model.anims['sit_' + n] = { duration: a.duration, ch };
     });
   }
 }
