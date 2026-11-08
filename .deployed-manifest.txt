@@ -66,6 +66,7 @@ css/style.css
 index.html
 js/auth.js
 js/bigshops.js
+js/bond.js
 js/boutique.js
 js/creator.js
 js/face.js
@@ -84,6 +85,7 @@ js/login.js
 js/music.js
 js/net-config.js
 js/net.js
+js/notice.js
 js/outfit.js
 js/plaza.js
 js/profile.js

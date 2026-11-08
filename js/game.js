@@ -15,7 +15,7 @@ const G = {
   me: null, remotes: [], coins: [], hour: 18.4, timeMode: 'auto', t: 0, joy: { x: 0, z: 0 }, keys: {}, target: null,
   owned: store.get('owned', []),   // [创建面板] 已领取的套装（例如 'hoodie'）
   coinCount: store.get('coins', 1250), chat: { world: [], team: [], family: [] }, tab: 'world',
-  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62, yaw: 0 }, camMode: store.get('camMode', store.get('wide', false) ? 'wide' : 'orig'), quality: store.get('q', 1.5), outline: store.get('ol', 1),
+  cam: { target: [0, 0, 8], dist: 25, pitch: .7, fov: .62, yaw: 0 }, camMode: store.get('camMode', store.get('wide', false) ? 'wide' : 'orig'), quality: store.get('q', 1.5), outline: store.get('ol', 0),
   wide: store.get('wide', false), transitioning: false, near: null, standHot: { id: 'stand' }, stg: { mode: 'idle', queue: [] }, ktv: { queue: [], cur: null, arrived: false, online: false, mine: false, doneOk: false },
 };
 const SKIN = [[1, 1, 1], [.96, .88, .8], [.88, .74, .62], [.78, .62, .5]];
@@ -617,8 +617,8 @@ function bindInput() {
     const b = e.target.closest('button'); if (!b) return; const a = b.dataset.act;
     if (a === 'pose') openActions();
     else if (a === 'wardrobe') openWardrobe();
-    else if (a === 'chat') { $('chatIn').focus(); }
-    else if (a === 'chorus') toast(G.scene.private ? '合唱：先在点歌机点歌，邀请好友后可一起上台（开发中）' : '合唱要在 KTV 大堂里使用，进去试试吧 🎤');
+    else if (a === 'notice') { if (window.Notice) Notice.open(); else toast('通知加载中…'); }
+    else if (a === 'chorus') toast('此功能暂时还未开通', 2200);
     else if (a === 'friends') { if (window.Friends) Friends.open(); }
     else if (a === 'gift') { if (window.Shop) Shop.open('gift'); else toast('礼物功能加载中…'); }
   });

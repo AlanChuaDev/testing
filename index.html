@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#120e2b">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="星光广场">
 <title>STAR PLAZA · 星光广场</title>
-<script>window.APP_V='20261107-merge3'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'"><link rel="stylesheet" href="css/creator.css?v='+window.APP_V+'">'); /* [创建面板] creator.css */</script>
+<script>window.APP_V='20261108-opt1'; /* ★ 每次发布新版本，只改这一个数字，用户就会拿到最新文件，不会卡在旧缓存 */ document.write('<link rel="stylesheet" href="css/style.css?v='+window.APP_V+'"><link rel="stylesheet" href="css/creator.css?v='+window.APP_V+'">'); /* [创建面板] creator.css */</script>
 </head>
 <body>
 <!-- login / create character -->
@@ -91,7 +91,7 @@
     <button id="enterBtn" disabled><span id="enterIcon">🚪</span><span id="enterText">互动</span></button>
     <button data-act="chorus"><span>🎤</span>合唱</button>
     <button data-act="friends"><span>👥</span>好友</button>
-    <button data-act="chat"><span>💬</span>聊天</button>
+    <button data-act="notice"><span>📢</span>通知</button>
     <button data-act="gift"><span>🎁</span>礼物</button>
     <button data-act="pose"><span>🕺</span>动作</button>
     <button data-act="wardrobe"><span>👗</span>换装</button>
@@ -214,7 +214,7 @@
       <button type="button" data-page="profile"><em>🪪</em><span>玩家资料</span></button>
       <button type="button" data-page="teleport"><em>🌀</em><span>传送管理</span></button>
       <button type="button" data-page="music"><em>🎵</em><span>音乐调试</span></button>
-      <button type="button" data-page="server"><em>📣</em><span>全服管理</span></button>
+      <button type="button" data-page="server"><em>📣</em><span>全服管理</span></button>      <button type="button" data-page="notice"><em>📢</em><span>通知中心</span></button>
       <button type="button" data-page="settings"><em>⚙</em><span>GM设置</span></button>
     </nav>
 
@@ -363,6 +363,34 @@
           <h3>禁言中的玩家</h3>
           <div id="gmMutedList" class="gmList"></div>
         </div>
+        <!-- 通知中心：发布 / 删除玩家在「通知」里看到的通告、更新、活动 -->
+        <div class="gmPage" id="gmPage-notice" hidden>
+          <h3>发布通知</h3>
+          <div class="gmRow"><select id="gmNoticeKind" class="gmSel"><option value="notice">通告</option><option value="update">更新</option><option value="event">活动</option></select></div>
+          <input id="gmNoticeTitle" class="gmSel" maxlength="40" placeholder="标题（最多 40 字）" style="width:100%;margin:6px 0">
+          <textarea id="gmNoticeBody" class="gmAnnounce" maxlength="600" placeholder="内容（最多 600 字，可以换行）"></textarea>
+          <div class="gmRow"><button id="gmNoticeSend" class="chip on" type="button">📢 发布通知</button><button id="gmNoticeRefresh" class="chip" type="button">↻ 刷新</button></div>
+          <h3>已发布的通知</h3>
+          <div id="gmNoticeList" class="gmList"></div>
+        </div>
+
+        <div class="gmPage" id="gmPage-server" hidden>
+          <h3>全服公告 <span class="hint" id="gmAnnCount">0/120</span></h3>
+          <textarea id="gmAnnouncementText" class="gmAnnounce" maxlength="120" placeholder="输入全服公告（最多 120 字）"></textarea>
+          <div class="gmRow"><button id="gmAnnouncementSend" class="chip on" type="button">📣 发布公告</button></div>
+          <h3>处罚操作</h3>
+          <div class="gmRow"><select id="gmSvPlayer" class="gmSel"></select><button class="chip" type="button" id="gmSvRefresh">↻</button></div>
+          <div class="gmRow">
+            <button class="chip" type="button" data-svact="mute" data-min="15">禁言 15 分</button>
+            <button class="chip" type="button" data-svact="mute" data-min="60">禁言 1 小时</button>
+            <button class="chip" type="button" data-svact="mute" data-min="1440">禁言 24 小时</button>
+            <button class="chip" type="button" data-svact="unmute">解除禁言</button>
+            <button class="chip danger" type="button" data-svact="kick">踢出房间</button>
+          </div>
+          <h3>禁言中的玩家</h3>
+          <div id="gmMutedList" class="gmList"></div>
+        </div>
+
 
         <!-- GM 设置 -->
         <div class="gmPage" id="gmPage-settings" hidden>
@@ -395,7 +423,7 @@
 <script>
 (function () {
   var V = window.APP_V || String(Date.now());
-  ['js/firebase-config.js', 'js/auth.js', 'js/net-config.js', 'js/login.js', 'js/glbchar.js', 'js/face.js', 'js/outfit.js', 'js/creator.js', 'js/world.js', 'js/scenes.js', 'js/scene-common.js', 'js/plaza.js', 'js/boutique.js', 'js/ktv.js', 'js/ktvrooms.js', 'js/bigshops.js', 'js/songkiosk.js', 'js/scene-klcc.js', 'js/scene-bukit-bintang.js', 'js/scene_beach.js', 'js/scene_funfair.js', 'js/scooter.js', 'js/scooter_hands.js', 'js/scooter_pose.js', 'js/scooter_ride.js', 'js/haunted_fx.js', 'js/haunted_tex.js', 'js/haunted_game.js', 'js/scene_haunted.js', 'js/scene_merdeka.js', 'js/scene-chapel.js', 'js/music.js', 'js/karaoke-audio.js', 'js/songs.js', 'js/net.js', 'js/team.js', 'js/profile.js', 'js/shopdata.js', 'js/shop.js', 'js/gm.js', 'js/floorlift.js', 'js/game.js'].forEach(function (s) { document.write('<script src="' + s + '?v=' + V + '"><\/script>'); });
+  ['js/firebase-config.js', 'js/auth.js', 'js/net-config.js', 'js/login.js', 'js/glbchar.js', 'js/face.js', 'js/outfit.js', 'js/creator.js', 'js/world.js', 'js/scenes.js', 'js/scene-common.js', 'js/plaza.js', 'js/boutique.js', 'js/ktv.js', 'js/ktvrooms.js', 'js/bigshops.js', 'js/songkiosk.js', 'js/scene-klcc.js', 'js/scene-bukit-bintang.js', 'js/scene_beach.js', 'js/scene_funfair.js', 'js/scooter.js', 'js/scooter_hands.js', 'js/scooter_pose.js', 'js/scooter_ride.js', 'js/haunted_fx.js', 'js/haunted_tex.js', 'js/haunted_game.js', 'js/scene_haunted.js', 'js/scene_merdeka.js', 'js/scene-chapel.js', 'js/music.js', 'js/karaoke-audio.js', 'js/songs.js', 'js/net.js', 'js/team.js', 'js/profile.js', 'js/shopdata.js', 'js/shop.js', 'js/bond.js', 'js/notice.js', 'js/gm.js', 'js/floorlift.js', 'js/game.js'].forEach(function (s) { document.write('<script src="' + s + '?v=' + V + '"><\/script>'); });
 })();
 </script>
 </body>

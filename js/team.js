@@ -162,8 +162,14 @@ setInterval(() => {
 }, 120);
 
 /* ================= 消息 ================= */
+const chatTab = ch => { const b = document.querySelector('#tabs [data-ch="' + ch + '"]'); if (b) b.click(); };   // 切换聊天框的 世界 / 组队 标签
+let lastVoice = '';
+function sendVoice() { if (!T) { lastVoice = ''; return; } const k = (micOn ? 1 : 0) + '' + (spkOn ? 1 : 0); if (k === lastVoice) return; lastVoice = k; Net.send({ type: 'team_voice', mic: micOn, spk: spkOn }); }
 Net.on('team', m => {
-  T = m.team || null; saveTeam();
+  const was = !!T;
+  T = m.team || null; saveTeam(); lastVoice = '';
+  if (!was && T) chatTab('team');                                  // 刚组上队：聊天框默认选「组队」
+  else if (was && !T && __game.tab === 'team') chatTab('world');   // 队伍没了：切回「世界」
   if (!T) { if (micOn) setMic(false); for (const pid of [...peers.keys()]) closePeer(pid); if (m.reason) { toast(m.reason, 2400); __game.api.addMsg('team', '', m.reason, false, true); } }
   else { syncPeers(); }
   renderHud(); renderPanel();
@@ -200,7 +206,7 @@ function build() {
   if (window.Karaoke && Karaoke.mountFx) { Karaoke.mountFx($('fxSong')); Karaoke.mountFx($('fxSet')); }
 }
 function renderHud() {
-  const hud = $('teamHud'); if (!hud) return; hud.textContent = '';
+  const hud = $('teamHud'); if (!hud) return; hud.textContent = ''; sendVoice();
   const n = T ? T.members.length : 0, anySpeak = [...speaking].some(x => x !== 'me');
   hud.append(h('button', { class: 'tmBtn' + (anySpeak ? ' talk' : ''), type: 'button', text: T ? '👥 ' + n + '/' + MAX_TEAM : '👥 组队', onclick: () => openPanel() }));
   if (T) {
@@ -221,9 +227,14 @@ function renderPanel() {
   T.members.forEach(m => {
     const self = m.pub === my.pub, talk = self ? speaking.has('me') : speaking.has(m.pid);
     const row = h('div', { class: 'tmRow' + (m.online ? '' : ' off') });
-    row.append(h('i', { class: 'tmDot' + (talk ? ' talk' : '') }), h('b', { text: (m.pub === T.leader ? '👑 ' : '') + m.name + (self ? '（我）' : '') }), h('small', { text: m.online ? placeName(m.room) : '掉线重连中…' }));
+    const isLead = m.pub === T.leader, mic = self ? micOn : !!m.mic, spk = self ? spkOn : m.spk !== false;
+    row.append(h('i', { class: 'tmDot' + (talk ? ' talk' : '') }), h('b', { text: (isLead ? '👑 ' : '') + m.name + (self ? '（我）' : '') }));
+    if (isLead) row.append(h('span', { text: '队长', style: 'background:#ffcf4a;color:#2a1c00;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:900;white-space:nowrap' }));
+    row.append(h('small', { text: m.online ? placeName(m.room) : '掉线重连中…' }));
+    if (m.online || self) row.append(h('span', { title: '麦克风 / 喇叭', style: 'font-size:12px;white-space:nowrap;opacity:' + (mic || spk ? 1 : .6), text: (mic ? '🎙开' : '🎙关') + ' ' + (spk ? '🔊开' : '🔇关') }));
     const tp = teleportTarget(m.room);
     if (!self && m.online && tp) row.append(h('button', { class: 'chip', type: 'button', text: m.room === here ? '同图' : '传送', disabled: m.room === here ? '' : null, onclick: () => teleportTo(m) }));
+    if (isLeader() && !self && m.online) row.append(h('button', { class: 'chip', type: 'button', text: '转移队长', onclick: () => { if (confirm('把队长转移给 ' + m.name + '？')) Net.send({ type: 'team_transfer', pub: m.pub }); } }));
     if (isLeader() && !self) row.append(h('button', { class: 'chip', type: 'button', text: '移出', onclick: () => { if (confirm('把 ' + m.name + ' 移出队伍？')) Net.send({ type: 'team_kick', pub: m.pub }); } }));
     list.append(row);
   });

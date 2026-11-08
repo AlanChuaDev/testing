@@ -73,6 +73,7 @@ function refreshPage() {
   else if (page === 'reports') Net.send({ type: 'gm_reports' });
   else if (page === 'players' || page === 'server' || page === 'profile' || page === 'teleport') { Net.send({ type: 'gm_players' }); if (page === 'server') Net.send({ type: 'gm_bans' }); }
   else if (page === 'settings') Net.send({ type: 'gm_action_log' });
+  else if (page === 'notice') Net.send({ type: 'notice_get' });
 }
 function show(p) {
   if (page === 'music' && p !== 'music') stopPreview();
@@ -83,6 +84,7 @@ function show(p) {
   if (p === 'music') ensureMusic();
   if (p === 'profile' || p === 'teleport') renderSel();
   if (p === 'server') renderServer();
+  if (p === 'notice') renderNotice();
   refreshPage();
 }
 function enter(on) {
@@ -221,6 +223,18 @@ function renderReportDetail() {
 }
 
 /* ---------- 全服管理 ---------- */
+/* ---------- 通知中心：发布 / 删除玩家在「通知」里看到的内容 ---------- */
+let noticeList = [];
+const KIND_NAME = { notice: '通告', update: '更新', event: '活动' };
+function renderNotice() {
+  const root = $('gmNoticeList'); if (!root) return; root.replaceChildren();
+  if (!noticeList.length) { root.appendChild(node('p', 'hint', '还没有发布过通知')); return; }
+  noticeList.forEach(n => {
+    const c = node('div', 'gmListItem'); c.style.cursor = 'default';
+    c.append(node('strong', '', '[' + (KIND_NAME[n.kind] || n.kind) + '] ' + n.title), node('div', 'sub', fmtAt(new Date(n.at).toISOString()) + ' · ' + String(n.body || '').slice(0, 60)));
+    const r = node('div', 'gmRow'); gmBtn(r, '删除', () => { if (confirm('删除这条通知？')) Net.send({ type: 'gm_notice_del', id: n.id }); }, 'danger'); c.appendChild(r); root.appendChild(c);
+  });
+}
 function renderServer() {
   const s = $('gmSvPlayer'), keep = s.value; s.replaceChildren();
   const others = players.filter(p => !(window.Net && p.pid === Net.myId()));
@@ -304,6 +318,14 @@ function bind() {
 
   /* 全服管理 */
   $('gmAnnouncementText').addEventListener('input', () => { $('gmAnnCount').textContent = $('gmAnnouncementText').value.length + '/120'; });
+  $('gmNoticeSend').onclick = () => {
+    const title = $('gmNoticeTitle').value.trim(); if (!title) return consoleMsg('❌ 标题不能为空');
+    Net.send({ type: 'gm_notice_add', kind: $('gmNoticeKind').value, title, body: $('gmNoticeBody').value });
+    $('gmNoticeTitle').value = ''; $('gmNoticeBody').value = '';
+  };
+  $('gmNoticeRefresh').onclick = () => Net.send({ type: 'notice_get' });
+  Net.on('notices', m => { noticeList = m.list || []; if (page === 'notice') renderNotice(); });
+  ['gmNoticeTitle', 'gmNoticeBody'].forEach(id => $(id).addEventListener('keydown', e => e.stopPropagation()));
   $('gmAnnouncementSend').onclick = () => {
     const el = $('gmAnnouncementText'), text = el.value.trim();
     if (!text) return consoleMsg('先输入公告内容');

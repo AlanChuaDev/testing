@@ -271,8 +271,15 @@ async function pushFriends(pub) { // 把最新的好友列表推给在线的人
   const w = byPubWs.get(pub); if (!w || !S) return;
   const v = await S.friendsView(pub); w.friendSet = new Set(v.friends.map((f) => f.pub)); send(w, Object.assign({ type: "friends" }, await withBonds(pub, withPresence(v))));
 }
-function bondNotify(a, b, r) { // 升级了：通知双方，并刷新好友列表上的进度条
-  if (!r || !r.gained) return;
+function bondNotify(a, b, r) { // 升级了 / 完成累计任务：通知双方，并刷新好友列表上的进度条
+  if (!r || (!r.gained && !(r.rewards && r.rewards.length))) return;
+  if (r.rewards && r.rewards.length) {
+    const wa = byPubWs.get(a), wb = byPubWs.get(b);
+    for (const rw of r.rewards) {
+      const text = "🎉 互动任务完成：" + rw.name + " " + rw.goal + rw.unit + "，亲密度 +" + rw.xp;
+      if (wa) send(wa, { type: "toast", message: text }); if (wb) send(wb, { type: "toast", message: text });
+    }
+  }
   if (r.levelUp) {
     const wa = byPubWs.get(a), wb = byPubWs.get(b);
     if (wa) send(wa, { type: "toast", message: "💞 你和 " + ((wb && wb.name) || "好友") + " 的亲密度升到 Lv." + r.levelUp + " 了！" });
@@ -342,6 +349,26 @@ setInterval(() => {
 }, 500);
 
 // ---------- 队伍 ----------
+// ---------- 通知中心（通告 / 更新 / 活动）：GM 在面板里发布，所有玩家在「通知」里查看；存在 Firestore 的 notices/main ----------
+let noticeCache = null;
+const noticeStore = () => (AUTH && AUTH.store) || null;
+async function noticesLoad() {
+  if (noticeCache) return noticeCache;
+  let d = null; try { const st = noticeStore(); d = st ? await st.get("notices", "main") : null; } catch (e) { console.warn("notices load failed:", e.message); }
+  noticeCache = d && Array.isArray(d.list) ? d.list : [];
+  if (!noticeCache.length) { // 第一次：放两条示例，GM 之后可以在面板里删掉 / 新增
+    const at = Date.now();
+    noticeCache = [
+      { id: "n" + at, kind: "update", title: "新功能：签到、商店、礼物、好友亲密度", body: "· 点左上角金币：每日签到、商店（称号 / 头像框 / 气泡 / 名字颜色）、送礼物。\n· 好友列表里能看到亲密度等级和进度条，每天可以问暖。\n· 点好友旁边的「互动」可以查看亲密度任务。", at },
+      { id: "n" + (at + 1), kind: "notice", title: "欢迎来到星光广场", body: "有问题可以点击玩家举报，GM 会处理。祝你玩得开心！", at: at + 1 },
+    ];
+    noticesSave();
+  }
+  return noticeCache;
+}
+async function noticesSave() { const st = noticeStore(); if (st) { try { await st.set("notices", "main", { list: noticeCache }); } catch (e) { console.warn("notices save failed:", e.message); } } }
+const NOTICE_KINDS = { notice: 1, update: 1, event: 1 };
+
 // teams: id -> { id, leader(pub), members: Map(pub -> {pub, name, pid|null, offlineAt|null}), banned: Set(pub) }
 const teams = new Map();
 const teamOf = new Map(); // pub -> teamId
@@ -352,7 +379,7 @@ function teamView(t) {
     id: t.id, leader: t.leader,
     members: [...t.members.values()].map((m) => {
       const c = m.pid ? byPid.get(m.pid) : null;
-      return { pub: m.pub, name: m.name, pid: c ? m.pid : null, room: c ? c.room : null, online: !!c };
+      return { pub: m.pub, name: m.name, pid: c ? m.pid : null, room: c ? c.room : null, online: !!c, mic: !!(c && c.vMic), spk: c ? c.vSpk !== false : true };
     }),
   };
 }
@@ -689,6 +716,22 @@ wss.on("connection", (ws) => {
       return send(ws,{type:"gmReportActionResult",ok:true,message:"举报已更新为："+action});
     }
 
+    if (m.type === "notice_get") { return send(ws, { type: "notices", list: await noticesLoad() }); }   // 所有人都能看
+    if (m.type === "gm_notice_add" || m.type === "gm_notice_del") {
+      if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
+      const list = await noticesLoad(), clean = (t, n) => String(t || "").replace(/[\u0000-\u0008\u000b-\u001f<>]/g, "").trim().slice(0, n);
+      if (m.type === "gm_notice_add") {
+        const kind = NOTICE_KINDS[m.kind] ? m.kind : "notice", title = clean(m.title, 40), body = clean(m.body, 600);
+        if (!title) return send(ws, { type: "gmActionResult", ok: false, message: "标题不能为空" });
+        const item = { id: "n" + Date.now(), kind, title, body, at: Date.now() };
+        list.unshift(item); if (list.length > 60) list.length = 60; await noticesSave();
+        for (const client of wss.clients) send(client, { type: "notice_new", item });
+        gmActionLog.push({ at: new Date().toISOString(), by: ws.name, action: "notice_add", target: title, room: "全服" }); if (gmActionLog.length > 200) gmActionLog.shift();
+        send(ws, { type: "notices", list }); return send(ws, { type: "gmActionResult", ok: true, message: "通知已发布" });
+      }
+      const i = list.findIndex((x) => x.id === String(m.id || "")); if (i < 0) return send(ws, { type: "gmActionResult", ok: false, message: "找不到这条通知" });
+      list.splice(i, 1); await noticesSave(); send(ws, { type: "notices", list }); return send(ws, { type: "gmActionResult", ok: true, message: "通知已删除" });
+    }
     if (m.type === "gm_announcement") {
       if (!ws.isGM) return send(ws, { type: "gmError", code: "auth", message: "没有 GM 权限，请重新登录" });
       const text=String(m.text||"").replace(/[\u0000-\u001f<>]/g,"").trim().slice(0,120); if(!text)return send(ws,{type:"gmActionResult",ok:false,message:"公告内容不能为空"});
@@ -826,9 +869,21 @@ wss.on("connection", (ws) => {
       teamRemove(t, pub, "你被队长移出了队伍");
       return;
     }
+    if (m.type === "team_voice") { // 队员把自己的麦克风 / 喇叭开关状态报给队伍（队伍面板里每个人都能看到）
+      ws.vMic = !!m.mic; ws.vSpk = m.spk !== false;
+      const t = teamOfWs(ws); if (t) teamSend(t);
+      return;
+    }
+    if (m.type === "team_transfer") { // 队长转移队长
+      const t = teamOfWs(ws); if (!t || t.leader !== ws.pub) return send(ws, { type: "error", message: "只有队长可以转移队长" });
+      const pub = String(m.pub || ""), tm = t.members.get(pub); if (!tm || pub === ws.pub) return;
+      t.leader = pub; teamSend(t);
+      for (const c of teamMembersWs(t)) send(c, { type: "team_msg", text: "👑 " + tm.name + " 成为了新队长" });
+      return;
+    }
 
     // ----- 资料 / 好友 / 私信（需要登录）-----
-    if (/^(profile_|name_set|name_check|name_first|friends?_|dm_|care$|wallet_|sign_in$|shop_|gift_)/.test(m.type)) {   // 问暖 / 钱包 / 签到 / 商店 / 礼物 的消息也要走这里（以前漏了，所以点了没反应）
+    if (/^(profile_|name_set|name_check|name_first|friends?_|dm_|care$|bond_|wallet_|sign_in$|shop_|gift_)/.test(m.type)) {   // 问暖 / 钱包 / 签到 / 商店 / 礼物 的消息也要走这里（以前漏了，所以点了没反应）
       if (!S) throw UE("社交功能暂未开启");
       if (!ws.authed) throw UE("请先登录：点左上角「我」→ 账号");
       const pubArg = () => { const p = String(m.pub || "").slice(0, 16); if (!/^[0-9a-f]{16}$/.test(p)) throw UE("参数不对"); return p; };
@@ -907,10 +962,22 @@ wss.on("connection", (ws) => {
           if (ws.room) sendToRoom(ws.room, fx); else send(ws, fx);
           if (tw.room !== ws.room) send(tw, fx);
           send(tw, { type: "toast", message: "🎁 " + ws.name + " 送了你 " + g.icon + g.name });
-          if (ws.friendSet && ws.friendSet.has(to)) bondGain(ws.pub, to, "gift", Math.max(1, Math.round(g.price / 5)));   // 送给好友：亲密度 = 价格 ÷ 5
+          if (ws.friendSet && ws.friendSet.has(to)) {
+            bondGain(ws.pub, to, "gift", Math.max(1, Math.round(g.price / 5)));   // 送给好友：亲密度 = 价格 ÷ 5
+            try { // 在私信里提示对方（只有好友之间能发私信）
+              const text = "🎁 送了你 " + g.icon + g.name, sr = await S.sendDm(ws.pub, to, text);
+              send(ws, { type: "dm", pub: to, mine: true, text, at: sr.at });
+              send(tw, { type: "dm", pub: ws.pub, name: ws.name, mine: false, text, at: sr.at });
+            } catch (e) { /* 对方拉黑了你等情况：私信发不出，不影响送礼 */ }
+          }
           return sendWallet();
         }
         return;
+      }
+      if (m.type === "bond_detail") { // 互动面板：和某个好友的亲密度任务进度
+        if (!B) throw UE("暂时不能查看互动");
+        const to = pubArg(), f = await S.getF(ws.pub); if (!f.friends.includes(to)) throw UE("需要先成为好友");
+        return send(ws, Object.assign({ type: "bond_detail", pub: to }, await B.detail(ws.pub, to)));
       }
       if (m.type === "care") { // 每日问暖：给好友发一句问候，双方亲密度增加；每人每天对每个好友一次
         if (!B) throw UE("暂时不能问暖");

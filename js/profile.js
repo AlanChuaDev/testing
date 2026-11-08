@@ -126,6 +126,7 @@ function renderFriends() {
     return h('div', { class: 'frBond' }, h('span', { class: 'frLv', text: '💞 Lv.' + b.level }),
       h('div', { class: 'frBar', title: b.maxed ? '亲密度已满级' : '距离下一级 ' + (b.need - b.into) }, h('i', { style: 'width:' + pct + '%' })),
       h('span', { class: 'frXp', text: b.maxed ? 'MAX' : b.into + '/' + b.need }),
+      h('button', { class: 'chip', type: 'button', text: '📋 互动', title: '查看亲密度任务', onclick: () => { if (window.Bond) Bond.open(f.pub, f.name); } }),
       h('button', { class: 'chip' + (b.careDone ? '' : ' on'), type: 'button', text: b.careDone ? '✔ 已问暖' : '💌 问暖', disabled: b.careDone ? '' : null, onclick: () => send({ type: 'care', pub: f.pub }) }));
   };
   [...S.friends].sort((a, c) => (c.online ? 1 : 0) - (a.online ? 1 : 0)).forEach(f => wrap.append(h('div', { class: 'frItem' }, h('div', { class: 'frRow' },
