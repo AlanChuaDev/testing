@@ -186,6 +186,7 @@ function clearRemotes() { remotes.clear(); if (G) G.remotes.length = 0; refreshC
 function applyState(e, s, snap) {
   e.tx = s.x; e.tz = s.z; e.ty = s.y; e.yaw = s.yaw;
   e.moving = !!s.mv; e.run = !!s.run; e.sing = !!s.sing;
+  if (s.sc > 0 && window.Scooter) { const c = Scooter.COLORS[s.sc % 100]; e.ride = { slot: Math.floor(s.sc / 100) - 1, hex: c ? c.hex : Scooter.COLORS[0].hex }; } else e.ride = null;   // [STARGO] 骑踏板：sc = (车位+1)*100 + 颜色序号
   if (POSES.includes(s.pz)) { e.pose = 0.7; e.actClip = s.pz; } else { e.pose = 0; e.actClip = null; }
   if (s.sit) {
     if (!e.sit) { e.sit = { x: s.sit.x, z: s.sit.z, h: s.sit.h, yaw: s.sit.yaw }; e.sitFrom = [e.x, e.z]; e.sitP = snap ? 1 : 0; }
@@ -216,6 +217,7 @@ function pushState() {
     x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), yaw: +me.yaw.toFixed(2),
     mv: me.moving ? 1 : 0, run: me.run ? 1 : 0, sing: (me.sing || me.singing) ? 1 : 0,
     pz: me.pose > 0 ? (me.actClip || 'wave') : null,
+    sc: me.ride ? (me.ride.slot + 1) * 100 + Math.max(0, Scooter.COLORS.findIndex(c => c.hex === me.ride.hex)) : 0,
     sit: me.sit ? { x: me.sit.x, z: me.sit.z, h: me.sit.h, yaw: me.sit.yaw } : null,
   };
   const key = JSON.stringify(st), now = Date.now();

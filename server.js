@@ -243,6 +243,7 @@ function cleanState(s) {
     x: num(s.x), y: num(s.y), z: num(s.z), yaw: num(s.yaw),
     mv: s.mv ? 1 : 0, run: s.run ? 1 : 0, sing: s.sing ? 1 : 0,
     pz: typeof s.pz === "string" ? s.pz.slice(0, 12) : null,
+    sc: Math.max(0, Math.min(999, Math.floor(num(s.sc)))),   // 骑踏板：(车位+1)*100 + 颜色序号
     sit: null,
   };
   if (s.sit && typeof s.sit === "object") {

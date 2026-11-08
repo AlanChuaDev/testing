@@ -24,7 +24,8 @@ const TOPS = ['#ef6a5b', '#2fb3a3', '#f6b92b', '#6c8cf0', '#c779d9', '#ff9d5c', 
 const BOTS = ['#f4f4f8', '#2d3a5a', '#3d5a4a', '#e8a0b8', '#2b2b3a', '#c9b48a', '#8b5cf6'];
 const SOCKS = ['#6c8cf0', '#f4f4f8', '#2b2b3a', '#ff7ab6', '#5ac26e', '#f6b92b'];
 const SHOES = ['#f4f4f8', '#2b2b3a', '#ef6a5b', '#6c8cf0', '#f6b92b'];
-Outfit.init(G); Creator.init({ G, $, store, closePanels, drawPortrait });   // [创建面板] js/outfit.js + js/creator.js 需要游戏状态
+Outfit.init(G); Creator.init({ G, $, store, closePanels, drawPortrait });
+if (window.ScooterRide) ScooterRide.init({ G, $, toast, pay, applyView, setEnter });   // [STARGO] 电动踏板租借 / 骑行（js/scooter_ride.js）   // [创建面板] js/outfit.js + js/creator.js 需要游戏状态
 const SONGS = (window.SongData && SongData.LIST) || [];   // 歌曲表在 js/songs.js（含每首歌的时长）
 const GRACE = 25;                                                  // 轮到你后，走上舞台的时间（秒）
 
@@ -200,7 +201,7 @@ function glueScene(id, sc) {
 }
 
 function getScene(id) {
-  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'chapel' && Scenes.makeChapel ? Scenes.makeChapel(G.R, G.T) : id === 'chapel_in' && Scenes.makeChapelIn ? Scenes.makeChapelIn(G.R, G.T) : id === 'chapel_hall' && Scenes.makeChapelHall ? Scenes.makeChapelHall(G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'merdeka' && Scenes.makeMerdeka ? Scenes.makeMerdeka(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
+  if (!G.scenes[id]) G.scenes[id] = (Scenes.isKtvId && Scenes.isKtvId(id)) ? Scenes.makeTianhuang(id, G.R, G.T) : id === 'chapel' && Scenes.makeChapel ? Scenes.makeChapel(G.R, G.T) : id === 'chapel_in' && Scenes.makeChapelIn ? Scenes.makeChapelIn(G.R, G.T) : id === 'chapel_hall' && Scenes.makeChapelHall ? Scenes.makeChapelHall(G.R, G.T) : id === 'klcc' && Scenes.makeKlcc ? Scenes.makeKlcc(G.R, G.T, G.style) : id === 'bukit' && Scenes.makeBukit ? Scenes.makeBukit(G.R, G.T, G.style) : id === 'beach' && Scenes.makeBeach ? Scenes.makeBeach(G.R, G.T) : id === 'haunted' && Scenes.makeHaunted ? Scenes.makeHaunted(G.R, G.T) : id === 'funfair' && Scenes.makeFunfair ? Scenes.makeFunfair(G.R, G.T) : id === 'merdeka' && Scenes.makeMerdeka ? Scenes.makeMerdeka(G.R, G.T) : id === 'plaza' ? Scenes.makePlazaV3(G.R, G.T, G.style) : id === 'ktv' ? Scenes.makeKTV(G.R, G.T) : (Scenes.makeBoutiqueV2 || Scenes.makeBoutique)(G.R, G.T);
   if (!G.scenes[id]._glued) { G.scenes[id]._glued = true; glueScene(id, G.scenes[id]); }
   return G.scenes[id];
 }
@@ -212,9 +213,10 @@ function applyView() {
   const sc = G.scene; if (G.camMode === 'wide' && !sc.cameraWide) G.camMode = 'orig'; G.wide = G.camMode === 'wide';
   if (backView()) { const ind = !!(sc.indoor || sc.private); G.cam.pitch = ind ? .30 : .34; G.cam.dist = ind ? 5.4 : 8.6; G.cam.fov = ind ? .95 : .86; if (G.cam.yaw == null || G.cam.yaw === 0) G.cam.yaw = G.me ? G.me.yaw + Math.PI : 0; }
   else { const c = curCam(sc); G.cam.pitch = c.pitch; G.cam.dist = c.dist; G.cam.fov = c.fov; G.cam.yaw = 0; }
-  const b = $('viewBtn'); if (b) { b.hidden = false; b.textContent = '📷 视角：' + (backView() ? '后背' : G.wide ? '广角' : '原版'); }
+  const b = $('viewBtn'); if (b) { b.hidden = false; b.textContent = '📷 视角：' + (G.rideFP ? '骑行' : backView() ? '后背' : G.wide ? '广角' : '原版'); }
 }
 function enterScene(id, spawn) {
+  if (G.ride && window.ScooterRide) ScooterRide.stop('leave');   // [STARGO] 离开独立广场 = 自动还车
   G.scene = getScene(id); G.sceneId = id; G.target = null;
   const s = spawn || G.scene.spawn; G.me.x = s[0]; G.me.z = s[1]; G.me.y = G.scene.heightAt(s[0], s[1]); G.me.vx = G.me.vz = 0;
   G.me.yaw = 0; applyView(); G.cam.ty = G.me.y; G.cam.target = [s[0], 0, s[1] - (G.scene.camera.lead == null ? 2 : G.scene.camera.lead)];
@@ -423,13 +425,14 @@ function update(dt) {
   // player input
   let ix = G.joy.x, iz = G.joy.z; const k = G.keys;
   if (k.ArrowLeft || k.a) ix -= 1; if (k.ArrowRight || k.d) ix += 1; if (k.ArrowUp || k.w) iz -= 1; if (k.ArrowDown || k.s) iz += 1;
-  if (backView()) { G.inFwd = -iz; const cy = G.cam.yaw || 0, c = Math.cos(cy), s = Math.sin(cy), wx = ix * c + iz * s, wz = -ix * s + iz * c; ix = wx; iz = wz; }   // 后背视角：摇杆 / 键盘按「镜头方向」走
+  if (G.ride && G.rideFP && window.ScooterRide) { const r = ScooterRide.fpInput(ix, iz, dt); ix = r[0]; iz = r[1]; }   // [STARGO] 第一人称骑行：左右转向 / 向前加速
+  else if (backView()) { G.inFwd = -iz; const cy = G.cam.yaw || 0, c = Math.cos(cy), s = Math.sin(cy), wx = ix * c + iz * s, wz = -ix * s + iz * c; ix = wx; iz = wz; }   // 后背视角：摇杆 / 键盘按「镜头方向」走
   let mag = Math.hypot(ix, iz);
   if (me.sit && (mag > .3 || G.target)) standUp(me);
   if (mag > .12) { G.target = null; if (mag > 1) { ix /= mag; iz /= mag; mag = 1; } }
   else if (G.target) { const dx = G.target[0] - me.x, dz = G.target[1] - me.z, d = Math.hypot(dx, dz); if (d < .25) G.target = null; else { ix = dx / d; iz = dz / d; mag = 1; me.stuck += dt; } } else { ix = iz = mag = 0; }
   if (mag > .12 && !me.sit) {
-    const run = mag > .85 && (G.joy.x || G.joy.z || k.Shift) ? 1 : 0, sp = (run ? 6.2 : 3.8) * (mag > .85 ? 1 : mag / .85) * (flying() ? FLY.mul : 1);
+    const run = mag > .85 && (G.joy.x || G.joy.z || k.Shift) ? 1 : 0, sp = (run ? 6.2 : 3.8) * (mag > .85 ? 1 : mag / .85) * (flying() ? FLY.mul : 1) * (G.ride ? ScooterRide.MUL : 1);   // [STARGO] 骑踏板 = 1.5 倍
     const px = me.x, pz = me.z; moveEnt(me, ix / (mag || 1) * sp * dt, iz / (mag || 1) * sp * dt, sc);
     if (Math.hypot(me.x - px, me.z - pz) < sp * dt * .2) { if (G.target) { me.stuck += dt; if (me.stuck > .5) G.target = null; } } else me.stuck = 0;
     me.moving = true; me.run = !!run; me.pose = 0; me.actClip = null; const want = Math.atan2(ix, iz); let d = want - me.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); me.yaw += d * Math.min(1, dt * 12);
@@ -446,12 +449,12 @@ function update(dt) {
     inst.scale = (e.outfit.scale || 1) * 1.4 * PHONE_K();
     if (e.sit) { e.sitP = Math.min(1, e.sitP + dt / .35); const k = e.sitP * e.sitP * (3 - 2 * e.sitP), s = e.sit; e.x = e.sitFrom[0] + (s.x - e.sitFrom[0]) * k; e.z = e.sitFrom[1] + (s.z - e.sitFrom[1]) * k; e.y = s.h - SIT_DROP * k * (e.inst.scale / 1.4); e.yaw = s.yaw; e.moving = false; }
     if (e.cheerT > 0) e.cheerT -= dt;
-    if (e.pose > 0) { e.pose = Math.max(0, e.pose - dt); clip = e.actClip || ((G.ktv.arrived && !e.sing && !e.sit && G.sceneId === 'plaza') ? 'cheer' : 'wave'); if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer';
+    if (e.pose > 0) { e.pose = Math.max(0, e.pose - dt); clip = e.actClip || ((G.ktv.arrived && !e.sing && !e.sit && G.sceneId === 'plaza') ? 'cheer' : 'wave'); if (e.sit) clip = G.model.anims['sit_' + clip] ? 'sit_' + clip : 'sit'; } else if (e.sit) clip = 'sit'; else if (e.ride && window.ScooterRide) clip = ScooterRide.clip(e); else if (e.moving) clip = e.run ? 'run' : 'walk'; else if (e.sing) clip = 'sing'; else if (e.cheerT > 0) clip = 'cheer';
     inst.hidden.SignOK = clip.replace('sit_', '') !== 'signok'; inst.hidden.SignNo = clip.replace('sit_', '') !== 'signno';   // 举牌动作才显示牌子
     inst.play(clip, .2); inst.speed = e.moving ? (e.run ? 1 : (e.isMe ? 1.1 : 1.0)) : 1;
     if (e.vis !== false || e.isMe) inst.update(dt);
     { const tl = (CLIP_LIFT[clip.replace(/^sit_.*/, 'sit')] || 0) * inst.scale; e.cl = (e.cl || 0) + (tl - (e.cl || 0)) * Math.min(1, dt * 10); }   // 动作脚底补偿
-    inst.pos[0] = e.x; inst.pos[1] = e.y + (e.cl || 0); inst.pos[2] = e.z; let d = e.yaw - inst.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); inst.yaw += d * Math.min(1, dt * 14);
+    inst.pos[0] = e.x; inst.pos[1] = e.y + (e.cl || 0) + (e.ride ? ScooterRide.LIFT : 0); inst.pos[2] = e.z; let d = e.yaw - inst.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); inst.yaw += d * Math.min(1, dt * 14);
     if (e.bt > 0) { e.bt -= dt; if (e.bt <= 0) e.bubble = null; }
   }
   // coins
@@ -459,10 +462,13 @@ function update(dt) {
   if (G.scene.stage) ktvUpdate(dt);
   // interactions (portals / hotspots)
   let best = null, bd = 1e9; G.autoCool = Math.max(0, (G.autoCool || 0) - dt);
-  for (const p of [...sc.portals, ...sc.hotspots]) { const d = Math.hypot(me.x - p.x, me.z - p.z); if (p.hub) { if (d > p.r + .8) G.hubLock = false; else if (d < p.r && !G.hubLock && !G.transitioning && !me.sit && $('hubPanel').hidden) { G.hubLock = true; openHub(); } } if (p.auto) { if (d < p.r && !G.autoCool && !G.transitioning && !me.sit) { G.autoCool = 2; goTo(p.id, p.spawn || null); } continue; } if (d < p.r && d < bd) { bd = d; best = p; } }
+  for (const p of (G.ride ? [] : [...sc.portals, ...sc.hotspots])) { const d = Math.hypot(me.x - p.x, me.z - p.z); if (p.hub) { if (d > p.r + .8) G.hubLock = false; else if (d < p.r && !G.hubLock && !G.transitioning && !me.sit && $('hubPanel').hidden) { G.hubLock = true; openHub(); } } if (p.auto) { if (d < p.r && !G.autoCool && !G.transitioning && !me.sit) { G.autoCool = 2; goTo(p.id, p.spawn || null); } continue; } if (d < p.r && d < bd) { bd = d; best = p; } }
   if (me.sit) best = G.standHot; else if (!best) { const q = nearSeat(me, 1.5); if (q) best = q.hot; }
+  if (G.ride) best = G.ride.hot;   // [STARGO] 骑行中：不触发传送门 / 传送阵 / 互动点，黄色按钮 = 下车
   if (best !== G.near) { G.near = best; setEnter(best); }
+  if (window.ScooterRide) ScooterRide.update(dt);
   // camera follow
+  if (G.rideFP && G.ride) return;   // [STARGO] 第一人称：相机在 render 里直接跟车
   if (backView()) {
     const a2 = 1 - Math.exp(-dt * 9); G.cam.ty = (G.cam.ty || 0) + (me.y - (G.cam.ty || 0)) * a2; G.cam.target[0] += (me.x - G.cam.target[0]) * a2; G.cam.target[2] += (me.z - G.cam.target[2]) * a2;
     if (me.moving && (G.inFwd || 0) > .2 && performance.now() - (G.camTouchT || 0) > 1800) { let dy = me.yaw + Math.PI - (G.cam.yaw || 0); dy = Math.atan2(Math.sin(dy), Math.cos(dy)); G.cam.yaw = (G.cam.yaw || 0) + Math.max(-1.1 * dt, Math.min(1.1 * dt, dy * (1 - Math.exp(-dt * .9)))); }   // 自动转到背后：很慢、限速，不会晕；往后退 / 没在走时镜头不动
@@ -479,7 +485,8 @@ function render() {
   const env = sc.env(G.hour), cam = G.cam;
   let cdist = cam.dist;
   if (backView()) { const b = sc.bounds || { x0: -99, x1: 99, z0: -99, z1: 99 }, cp = Math.cos(cam.pitch), yw = cam.yaw || 0; for (let k = 0; k < 14 && cdist > 2.4; k++) { const ex = cam.target[0] + cdist * cp * Math.sin(yw), ez = cam.target[2] + cdist * cp * Math.cos(yw); if (ex >= b.x0 - 1.2 && ex <= b.x1 + 1.2 && ez >= b.z0 - 1.2 && ez <= b.z1 + 1.2) break; cdist *= .88; } }   // 镜头不会跑到地图外面（室内 / 窄的地方自动拉近）
-  const view = R.setCamera({ target: [cam.target[0], (backView() ? 1.05 : 0.8) + (cam.ty || 0), cam.target[2]], dist: cdist, pitch: cam.pitch, fov: cam.fov, yaw: backView() ? (cam.yaw || 0) : 0 }, w, h);
+  const fpv = G.rideFP && G.ride && window.ScooterRide;
+  const view = R.setCamera(fpv ? ScooterRide.fpCam() : { target: [cam.target[0], (backView() ? 1.05 : 0.8) + (cam.ty || 0), cam.target[2]], dist: cdist, pitch: cam.pitch, fov: cam.fov, yaw: backView() ? (cam.yaw || 0) : 0 }, w, h);
   R.begin(env, w, h, G.t);
   if (sc.updateOcclusion) { const dt2 = Math.min(.1, Math.max(.001, G.t - (G._ot == null ? G.t : G._ot))); G._ot = G.t; sc.updateOcclusion(view.eye, G.me, dt2); }
   // static opaque
@@ -507,8 +514,10 @@ function render() {
   }
   const ordered = vis.slice().sort((a, b) => Math.hypot(a.x - G.me.x, a.z - G.me.z) - Math.hypot(b.x - G.me.x, b.z - G.me.z));
   ordered.forEach((e, i) => {
+    if (fpv && e.isMe) return;   // 第一人称不画自己
     GR.draw(e.inst, view.VP, { light: lightDir, amb: env.charAmb, sun: env.charSun, view: [0, Math.sin(cam.pitch), Math.cos(cam.pitch)], outline: i < 26 ? olw : 0, line: env.line, rim });
   });
+  if (window.ScooterRide && G.sceneId === 'merdeka') ScooterRide.draw(R, env);   // [STARGO] 骑行中的踏板（自己 + 远程玩家）
   // occluders that currently hide the player: translucent layer
   for (const b of sc.batches) if (b.mat.mode === 0 && b.fade < .995) R.draw(b);
   // glows & additive layers
@@ -532,6 +541,7 @@ function render() {
   ovc.width = w; ovc.height = h; ov.clearRect(0, 0, w, h); ov.textAlign = 'center'; ov.textBaseline = 'middle';
   const sc2 = dpr, fs = 12 * sc2;
   for (const e of vis) {
+    if (fpv && e.isMe) continue;
     const near = Math.hypot(e.x - G.me.x, e.z - G.me.z) < 6.5 || e.isMe || e.speaking;
     const top = R.project([e.x, e.y + 1.78 * e.inst.scale, e.z]); if (!top) continue;
     let y = top[1] - 6 * sc2;
@@ -600,7 +610,9 @@ function bindInput() {
   });
   // buttons
   $('enterBtn').onclick = interact;
-  $('viewBtn').onclick = () => { const sc = G.scene, order = sc.cameraWide ? ['orig', 'wide', 'back'] : ['orig', 'back']; G.camMode = order[(Math.max(0, order.indexOf(G.camMode)) + 1) % order.length]; store.set('camMode', G.camMode); store.set('wide', G.camMode === 'wide'); if (backView()) G.cam.yaw = G.me.yaw + Math.PI; applyView(); G.cam.target[0] = G.me.x; G.cam.target[2] = G.me.z; };
+  $('viewBtn').onclick = () => {
+    if (G.ride) { const sc = G.scene, ord = ['ride', ...(sc.cameraWide ? ['orig', 'wide', 'back'] : ['orig', 'back'])], cur = G.rideFP ? 'ride' : G.camMode, nx = ord[(Math.max(0, ord.indexOf(cur)) + 1) % ord.length]; G.rideFP = nx === 'ride'; if (!G.rideFP) { G.camMode = nx; if (backView()) G.cam.yaw = G.me.yaw + Math.PI; } applyView(); G.cam.target[0] = G.me.x; G.cam.target[2] = G.me.z; return; }   // [STARGO] 骑行中的视角：骑行(第一人称) → 原版 → 广角 → 后背
+    const sc = G.scene, order = sc.cameraWide ? ['orig', 'wide', 'back'] : ['orig', 'back']; G.camMode = order[(Math.max(0, order.indexOf(G.camMode)) + 1) % order.length]; store.set('camMode', G.camMode); store.set('wide', G.camMode === 'wide'); if (backView()) G.cam.yaw = G.me.yaw + Math.PI; applyView(); G.cam.target[0] = G.me.x; G.cam.target[2] = G.me.z; };
   $('actions').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return; const a = b.dataset.act;
     if (a === 'pose') openActions();
@@ -626,6 +638,7 @@ function bindInput() {
 function syncSeg() { [['segQ', G.quality], ['segOl', G.outline]].forEach(([id, v]) => [...$(id).children].forEach(b => b.classList.toggle('on', parseFloat(b.dataset.v) === v))); }
 function interact() {
   const n = G.near; if (!n || G.transitioning) return;
+  if (G.ride && window.ScooterRide && ScooterRide.onUse(n)) return;
   if (G.scene.onUse && G.scene.onUse(n, { toast, goTo, setBubble, setCoins, G, pay })) return;
   if (n.hub) { openHub(); return; }
   if (n.to) { goTo(n.to, n.spawn); return; }

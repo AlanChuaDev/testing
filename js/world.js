@@ -231,8 +231,8 @@ class Renderer {
   }
   /* cam: {target:[x,y,z], dist, pitch, fov} */
   setCamera(cam, w, h) {
-    const p = cam.pitch, yw = cam.yaw || 0, cp = Math.cos(p), e = [cam.target[0] + cam.dist * cp * Math.sin(yw), cam.target[1] + cam.dist * Math.sin(p), cam.target[2] + cam.dist * cp * Math.cos(yw)];   // yw = 镜头绕人物转的角度（后背视角用；0 = 原来的固定视角）
-    const V = M4.look(e, cam.target, [0, 1, 0]), Pm = M4.persp(cam.fov, w / h, 1, 260);
+    const p = cam.pitch, yw = cam.yaw || 0, cp = Math.cos(p), e = cam.eye || [cam.target[0] + cam.dist * cp * Math.sin(yw), cam.target[1] + cam.dist * Math.sin(p), cam.target[2] + cam.dist * cp * Math.cos(yw)];   // cam.eye / cam.up / cam.near：第一人称（骑行）视角用   // yw = 镜头绕人物转的角度（后背视角用；0 = 原来的固定视角）
+    const V = M4.look(e, cam.target, cam.up || [0, 1, 0]), Pm = M4.persp(cam.fov, w / h, cam.near || 1, cam.far || 260);
     this.view = { eye: e, V, P: Pm, VP: M4.mul(Pm, V), iVP: null, w, h, cam };
     this.view.iVP = M4.inv(this.view.VP); return this.view;
   }

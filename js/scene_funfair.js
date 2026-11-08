@@ -432,7 +432,7 @@ function makeFunfair(R, T) {
     const gl = new MB(); bb(gl, x0, 2.4, z0 + 2.5, 6, 6, [.45, 1, .5]); pool(gl, x0, z0 + 4, 7, [.35, 1, .45]); bb(gl, x0 - 7, 3, z0 + 3, 5, 5, [.5, .9, .6]); bb(gl, x0 + 7, 3, z0 + 3, 5, 5, [.5, .9, .6]); bb(gl, x0, 2.2, z0 + 1, 3.4, 3.4, [1, .25, .15]);
     add(gl, { tex: T.glow, mode: 2, glow: e => .06 + night(e) * .75 }); const mn = new MB(); bb(mn, x0 + 1, 17, z0 - 14, 20, 20, [.9, .95, .6]); bb(mn, x0 + 1, 17, z0 - 14, 9, 9, [1, 1, .85]); add(mn, { tex: T.glow, mode: 2, glow: e => night(e) * .85 });
     S.hauntLights = { x: x0, z: z0 };
-    HS.push({ id: 'haunt', x: x0, z: z0 + 4.4, r: 2.0, label: '鬼屋', color: [.55, 1, .45], icon: 11, btn: '进鬼屋', iy: 6.3 }); }
+    HS.push({ id: 'haunt', x: x0, z: z0 + 4.4, r: 2.0, label: '鬼屋', color: [.55, 1, .45], icon: 11, btn: '进入鬼屋', iy: 6.3 }); }
 
   /* ---------- 摩天轮（浪漫版：静态部分）---------- */
   const WROSE = [1, .55, .72], WGOLD = [.98, .82, .4], WWHITE = [.99, .96, .98];
@@ -780,7 +780,8 @@ function makeFunfair(R, T) {
         if (s.s === 0) { if (!spend(10)) break; s.s = 1; s.t = 0; s.ph = 0; s.sp = 3.8 + Math.random() * 1.8; host.face(PI); host.toast('🔨 速度很快！指针到最上面时按“挥锤！”（只有 4 秒）', 2400); }
         else if (s.s === 1) { s.power = s.m; s.s = 2; s.t = 0; s.done = 0; host.wave(1.5); }
         break; }
-      case 'ring': case 'balloon': case 'fortune': case 'photo': case 'candy': case 'popcorn': case 'wish': case 'haunt':
+      case 'haunt': { const ap = window.__game && window.__game.api; if (ap && ap.goTo) { window.HZ_RETURN = 'funfair'; window.HZ_RETURN_SPAWN = [HAUNT.x, HAUNT.z + 7]; ap.goTo('haunted', null); } break; }
+      case 'ring': case 'balloon': case 'fortune': case 'photo': case 'candy': case 'popcorn': case 'wish':
         if (st.gameOpen) break; host.face(PI); host.wave(1); S.openGame(h.id); break;
     }
   }

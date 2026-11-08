@@ -540,7 +540,7 @@ function makeMerdeka(R, T) {
   /* ---------------- 树（雨树 / 椰影）---------------- */
   {
     const tr = new MB(), rr = rnd(77);
-    [[-62, -26.8], [60, -26.8], [-62, -3.2], [62, -3.2], [-72, 14], [72, 16], [-52, 40], [56, 38], [-24, 46], [26, 48]].forEach(([x, z]) => {
+    [[-62, -26.8], [60, -26.8], [-62, -3.2], [75.5, -3.2], [-72, 14], [72, 16], [-52, 40], [56, 38], [-24, 46], [26, 48]].forEach(([x, z]) => {
       const h = 3.6 + rr() * 1.6; tr.cyl(x, z, 0, h, .4, .22, 8, [.32, .24, .18]); tr.cyl(x + .3, z, h * .6, h + .8, .15, .08, 6, [.32, .24, .18]);
       for (let k = 0; k < 6; k++) { const a = k / 6 * TAU + rr(), dd = k === 0 ? 0 : 1.2 + rr() * .5, g = .42 + rr() * .2; tr.sphere(x + Math.cos(a) * dd, h + 1.0 + rr() * .8, z + Math.sin(a) * dd, 1.5 + rr() * .5, 1.1 + rr() * .3, 1.5 + rr() * .5, [.16 * g * 2, g * 1.1, .2 * g * 1.3], 7); }
     });
@@ -580,6 +580,54 @@ function makeMerdeka(R, T) {
   add(M.flags, { tex: X.flag });
   add(M.iron, { tex: R.white, ...emS('#101010', 0, 0) });
 
+  /* ---------------- STARGO 电动踏板租借点（大厦最右边、大马路南侧人行道，路灯 x=60.5 与 71.5 之间）---------------- */
+  if (G.Scooter) {
+    const DX = 66.4, DY = .1, list = [], PUR = G.Scooter.COLORS[0].hex;
+    [[-3.2, -7.05], [-1.1, -7.05], [1.0, -7.05], [-2.15, -5.05], [-.05, -5.05], [2.05, -5.05]].forEach(([dx, z]) => list.push({ x: DX + dx, y: DY, z, yaw: Math.PI / 2, hex: PUR }));
+    /* 停车位：被租走的踏板从停车位消失（我自己 / 远程玩家借走的），还车后回到原位 */
+    const dock = { x: DX, z: -6.05, r: 4.2, list, key: '', cur: [], G: null };
+    const taken = () => { const t = new Set(), g = dock.G; if (g) { if (g.me && g.me.ride) t.add(g.me.ride.slot); (g.remotes || []).forEach(e => { if (e.ride && e.ride.slot >= 0) t.add(e.ride.slot); }); } return t; };
+    const rebuild = () => {
+      const t = taken(), key = [...t].sort().join(','); if (key === dock.key && dock.cur.length) return; dock.key = key;
+      dock.cur.forEach(b => { const i = S.batches.indexOf(b); if (i >= 0) S.batches.splice(i, 1); });
+      dock.cur = G.Scooter.parked(R, list.filter((_, i) => !t.has(i)), 1.5); dock.cur.forEach(b => S.batches.push(b));
+    };
+    dock.freeSlot = (any, x, z) => { const t = taken(); let best = -1, bd = 1e9; list.forEach((it, i) => { if (t.has(i)) return; const d = x == null ? i : Math.hypot(it.x - x, it.z - z); if (d < bd) { bd = d; best = i; } }); return best; };
+    dock.refresh = () => rebuild(); dock.sync = g => { dock.G = g; rebuild(); };
+    S.scooterDock = dock; rebuild();
+    S.hotspots.push({ id: 'scooter_rent', x: DX, z: -6.05, r: 3.4, btn: '租借', icon: '🛴', color: [.6, .45, 1] });
+    S.onUse = (n) => { if (n.id === 'scooter_rent' && window.ScooterRide) { ScooterRide.openRental(); return true; } return false; };
+    /* 地面：车位白线（每车一格）*/
+    const bay = new MB(), BW = .035, BY = DY + .012;
+    list.forEach(it => { const x0 = it.x - 1.05, x1 = it.x + 1.15, z0 = it.z - .5, z1 = it.z + .5, W = [.93, .93, .97];
+      bay.floor(x0, z0 - BW, x1, z0 + BW, BY, W); bay.floor(x0, z1 - BW, x1, z1 + BW, BY, W); bay.floor(x0 - BW, z0, x0 + BW, z1, BY, W); bay.floor(x1 - BW, z0, x1 + BW, z1, BY, W); });
+    add(bay, { tex: R.white });
+    /* 立牌（品牌 + 三档价格）*/
+    const sx = DX + 4.15, sz = -7.4, post = new MB(); post.box(sx - .07, DY, sz - .21, sx + .07, DY + 3.2, sz - .07, [.2, .16, .36]); post.box(sx - .6, DY + .6, sz - .09, sx + .6, DY + .66, sz - .06, [.2, .16, .36]); add(post, { tex: R.white });
+    const panel = (text, o, y0, y1, dN) => { const sg = T.sign(text, Object.assign({ w: 512, h: Math.round(512 * (y1 - y0) / 1.5), fs: 56, bg: '#2a1a5e', fg: '#fff', border: '#9b7bff' }, o)), pb = new MB(); pb.box(sx - .75, DY + y0, sz - .06, sx + .75, DY + y1, sz + .06, [1, 1, 1], [1.5, y1 - y0], { noSides: true, noTop: true }); add(pb, { tex: sg.tex, em: sg.em, emDay: .45, emNight: dN || 1.5 }); };
+    panel('STARGO', { fs: 92, bg: '#3a1f8f', border: '#b79bff' }, 2.55, 3.25); panel('电动踏板', { fs: 70, bg: '#2a1a5e' }, 2.0, 2.55);
+    panel('2分钟 · 30', { bg: '#1b1240', fg: '#ffe27a' }, 1.55, 2.0, 1.3); panel('5分钟 · 50', { bg: '#1b1240', fg: '#ffe27a' }, 1.1, 1.55, 1.3); panel('10分钟 · 80', { bg: '#1b1240', fg: '#ffe27a' }, .65, 1.1, 1.3);
+    obs(sx - .12, sz - .12, sx + .12, sz + .12);
+    /* 指路牌：带箭头的「STARGO 电动踏板」牌，立在去租借点的路上（草坪 / 人行道），玩家走到哪都能看到方向 */
+    const arrowSign = (x, z, dir, y0) => {
+      const dist = Math.max(1, Math.round(Math.hypot(DX - x, -6.05 - z))), bw = 2.0, bh = 1.47, base = y0 || 0;
+      const tx = R.paint(512, 376, (g, w, h) => {
+        const rr = (x0, y0_, ww, hh, r) => { g.beginPath(); g.moveTo(x0 + r, y0_); g.arcTo(x0 + ww, y0_, x0 + ww, y0_ + hh, r); g.arcTo(x0 + ww, y0_ + hh, x0, y0_ + hh, r); g.arcTo(x0, y0_ + hh, x0, y0_, r); g.arcTo(x0, y0_, x0 + ww, y0_, r); g.closePath(); };
+        g.fillStyle = '#2a1a5e'; g.fillRect(0, 0, w, h); g.strokeStyle = '#9b7bff'; g.lineWidth = 12; rr(8, 8, w - 16, h - 16, 26); g.stroke();
+        g.fillStyle = '#3a1f8f'; rr(22, 22, w - 44, 92, 16); g.fill();
+        g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 italic 58px "Arial Black",Impact,sans-serif'; g.fillText('STARGO', w * .36, 70); g.font = '800 40px sans-serif'; g.fillText('电动踏板', w * .78, 70);
+        g.fillStyle = '#ffe27a'; g.save(); g.translate(w * .5, 218); g.rotate(dir === 'N' ? -Math.PI / 2 : dir === 'W' ? Math.PI : 0);
+        g.beginPath(); g.moveTo(-120, -30); g.lineTo(30, -30); g.lineTo(30, -72); g.lineTo(125, 0); g.lineTo(30, 72); g.lineTo(30, 30); g.lineTo(-120, 30); g.closePath(); g.fill(); g.restore();
+        g.fillStyle = '#fff'; g.font = '800 40px sans-serif'; g.fillText('租借点 约 ' + dist + ' 米', w / 2, 330);
+      });
+      const pb = new MB(), pm = new MB(), y1 = base + 2.0, y2 = y1 + bh;
+      pm.box(x - .06, base, z - .17, x + .06, y2 - .1, z - .07, [.2, .16, .36]);
+      pb.box(x - bw / 2, y1, z - .06, x + bw / 2, y2, z + .06, [1, 1, 1], [bw, bh], { noSides: true, noTop: true });
+      add(pm, { tex: R.white }); add(pb, { tex: tx, em: tx, emDay: .45, emNight: 1.4 }); obs(x - .12, z - .2, x + .12, z - .04);
+    };
+    [[-28, -5.3, 'E', .1], [10, 1.8, 'E'], [30, -5.3, 'E', .1], [48, -5.3, 'E', .1], [50, -24.9, 'E', .1], [66.4, 3.2, 'N'], [58, 40, 'N']].forEach(a => arrowSign(a[0], a[1], a[2], a[3]));
+  }
+
   /* ---------------- 传送门 + 边界 ---------------- */
   S.portals.push({ id: 'plaza', x: 64, z: 50, r: 2.0, label: '回到星光广场', color: [.4, 1, .7], spawn: [0, 12.5] }); S.exitPortal = S.portals[0];
   S.bounds = { x0: -78, x1: 78, z0: ZF + .4, z1: 57 };
@@ -589,6 +637,12 @@ function makeMerdeka(R, T) {
   S.walkable = (x, z) => x > S.bounds.x0 && x < S.bounds.x1 && z > S.bounds.z0 && z < S.bounds.z1;
   S.npcRect = { x0: -70, x1: 70, z0: -28, z1: 54 }; S.npcCount = 70;
   S.heightAt = () => 0;
+  const PAVE = [[-78, -4.5, 78, -1.8], [-78, 56, 78, 58], [-1.6, -1.8, 1.6, 56], [-45, -1.8, -41.8, 56], [41.8, -1.8, 45, 56]];   // 与 PB() 铺装同一批矩形，高 .115
+  S.floorY = (x, z) => {   // 地板比地面高的地方（踏板过去时抬高，避免车轮被盖住）
+    for (const r of PAVE) if (x > r[0] && x < r[2] && z > r[1] && z < r[3]) return .12;
+    if ((z < -24 && z > ZF - 6) || (z > -8 && z < -4.5)) return .12;
+    return 0;
+  };
   S.name = '独立广场'; S.indoor = false;
   S.env = (h) => { const e = Object.assign({}, envAt(h)); e.fog = mix(e.bot, e.top, .9); e.fogNear = 110; e.fogFar = 380; return e; };
   return S;

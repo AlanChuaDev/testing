@@ -412,3 +412,21 @@ button{font:inherit;color:inherit;cursor:pointer;border:0}
 /* GM 名字：金紫粉彩虹，一直流动变色 */
 .gm-name{font-weight:800;background:linear-gradient(90deg,#ff6ec7,#ffd86e,#7bf0ff,#b57bff,#ff6ec7);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:gmflow 3s linear infinite}
 @keyframes gmflow{to{background-position:300% 0}}
+
+/* ---- STARGO 电动踏板 ---- */
+.scPanel{padding-bottom:12px}
+.scPrev{position:relative;margin:8px 12px 0;border-radius:14px;overflow:hidden;background:#2a2150;line-height:0}
+.scPrev img{width:100%;height:auto;display:block}
+#scColName{position:absolute;left:10px;bottom:8px;padding:3px 10px;border-radius:999px;background:rgba(20,14,50,.72);font:700 12px/1.4 system-ui;color:#fff}
+.scSw{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;padding:10px 12px 4px}
+.scDot{width:32px;height:32px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);padding:0;box-shadow:0 2px 6px #0006}
+.scDot.on{border-color:#ffe27a;transform:scale(1.15);box-shadow:0 0 0 2px #ffe27a55,0 2px 8px #0008}
+.scPrice{display:flex;gap:8px;padding:8px 12px 0}
+.scBuy{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:9px 4px;border-radius:12px;background:linear-gradient(180deg,#5b3fd0,#3b2a99);border:1.5px solid #a58bff;color:#fff}
+.scBuy b{font-size:14px}.scBuy span{font-size:13px;color:#ffe27a;font-weight:700}
+.scTip{margin:8px 14px 0;font-size:12px;opacity:.75;text-align:center}
+.scRenew{top:auto;bottom:24%;transform:translate(-50%,0)}
+.scLeft{text-align:center;font:800 34px/1.2 system-ui;color:#ffe27a;padding:8px 0 0}
+.scNo{margin:10px 12px 0;padding:9px;border-radius:12px;background:#ffffff14;border:1.5px solid var(--line);color:#fff;font-weight:700}
+#rideHud{position:absolute;left:50%;top:calc(58px + var(--sa-t));transform:translateX(-50%);padding:4px 14px;border-radius:999px;background:rgba(40,24,110,.88);border:1.5px solid #a58bff;font-weight:800;font-size:13px;color:#fff;pointer-events:none;z-index:5}
+#rideHud.warn{background:rgba(150,30,50,.9);border-color:#ff9aa8}

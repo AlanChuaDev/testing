@@ -6,6 +6,7 @@ assets/music/beach.mp3
 assets/music/bukit.mp3
 assets/music/chapel.mp3
 assets/music/funfair.mp3
+assets/music/haunted.mp3
 assets/music/klcc.mp3
 assets/music/mall.mp3
 assets/music/merdeka.mp3
@@ -73,6 +74,9 @@ js/floorlift.js
 js/game.js
 js/glbchar.js
 js/gm.js
+js/haunted_fx.js
+js/haunted_game.js
+js/haunted_tex.js
 js/karaoke-audio.js
 js/ktv.js
 js/ktvrooms.js
@@ -89,8 +93,13 @@ js/scene-common.js
 js/scene-klcc.js
 js/scene_beach.js
 js/scene_funfair.js
+js/scene_haunted.js
 js/scene_merdeka.js
 js/scenes.js
+js/scooter.js
+js/scooter_hands.js
+js/scooter_pose.js
+js/scooter_ride.js
 js/shop.js
 js/shopdata.js
 js/songkiosk.js
